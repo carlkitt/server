@@ -17,7 +17,6 @@ const messageRoutes = require('./routes/messageRoutes');
 const skillRoutes = require('./routes/skillRoutes');
 
 const app = express();
-const server = http.createServer(app);
 
 // Security middleware
 app.use(helmet());
@@ -113,7 +112,12 @@ const setupRoutes = (io) => {
 
 // Connect DB and start server
 const PORT = process.env.PORT || 5000;
+
+// Initialize server on module load
+let dbConnected = false;
+
 connectDB().then(() => {
+  dbConnected = true;
   const io = new Server(server, {
     cors: corsOptions,
     transports: ['websocket', 'polling'],
@@ -126,11 +130,19 @@ connectDB().then(() => {
   // Setup routes AFTER io is created
   setupRoutes(io);
 
-  server.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  });
+  // Only listen if not in Vercel environment
+  if (!process.env.VERCEL) {
+    server.listen(PORT, () => {
+      console.log(`Server listening on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+  }
 }).catch(err => {
   console.error('Failed to start server', err);
-  process.exit(1);
+  if (!process.env.VERCEL) {
+    process.exit(1);
+  }
 });
+
+// Export for Vercel
+module.exports = app;
