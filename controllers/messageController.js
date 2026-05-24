@@ -234,3 +234,97 @@ exports.markMessagesSeen = async (req, res) => {
     res.status(500).json({ message: 'Failed to mark messages as seen' });
   }
 };
+
+/**
+ * Hire user - create conversation and send initial message
+ * POST /api/messages/hire
+ * Body: { recipientId, initialMessage }
+ */
+exports.hireUser = async (req, res) => {
+  try {
+    const { recipientId, initialMessage } = req.body;
+    const senderId = req.userId;
+    const io = req.io;
+
+    // Validate input
+    if (!mongoose.Types.ObjectId.isValid(recipientId)) {
+      return res.status(400).json({ message: 'Invalid recipient ID' });
+    }
+
+    if (!initialMessage || typeof initialMessage !== 'string' || initialMessage.trim().length === 0) {
+      return res.status(400).json({ message: 'Initial message required' });
+    }
+
+    if (initialMessage.length > 5000) {
+      return res.status(400).json({ message: 'Message too long' });
+    }
+
+    // Don't hire self
+    if (senderId === recipientId) {
+      return res.status(400).json({ message: 'Cannot hire yourself' });
+    }
+
+    // Verify recipient exists
+    const recipient = await User.findById(recipientId).lean();
+    if (!recipient) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if conversation already exists
+    let conversation = await Conversation.findOne({
+      members: { $all: [senderId, recipientId] }
+    });
+
+    if (!conversation) {
+      // Create new conversation
+      conversation = new Conversation({
+        members: [senderId, recipientId]
+      });
+      await conversation.save();
+    }
+
+    // Send initial message
+    const message = new Message({
+      conversationId: conversation._id,
+      senderId,
+      text: initialMessage.trim(),
+      seen: false
+    });
+
+    await message.save();
+    await message.populate('senderId', 'name username profilePicture');
+
+    // Update conversation
+    await Conversation.findByIdAndUpdate(
+      conversation._id,
+      {
+        lastMessage: message._id,
+        updatedAt: new Date()
+      }
+    );
+
+    // Broadcast to WebSocket if available
+    if (io) {
+      io.to(String(conversation._id)).emit('message:new', {
+        _id: message._id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        text: message.text,
+        seen: message.seen,
+        createdAt: message.createdAt
+      });
+    }
+
+    res.status(201).json({
+      conversationId: conversation._id,
+      message: 'Hire request sent',
+      data: {
+        conversationId: conversation._id,
+        message
+      }
+    });
+  } catch (err) {
+    console.error('hireUser error:', err);
+    res.status(500).json({ message: 'Failed to send hire request' });
+  }
+};

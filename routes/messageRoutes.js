@@ -5,7 +5,8 @@ const {
   getMessages, 
   sendMessage,
   getOrCreateConversation,
-  markMessagesSeen 
+  markMessagesSeen,
+  hireUser
 } = require('../controllers/messageController');
 const authMiddleware = require('../middleware/authMiddleware');
 const User = require('../models/User');
@@ -54,6 +55,9 @@ router.get('/conversations', getConversations);
 
 // Get or create conversation with another user
 router.post('/conversations', getOrCreateConversation);
+
+// Hire user - create conversation with initial message
+router.post('/hire', hireUser);
 
 // Get all messages in a conversation
 router.get('/conversations/:conversationId', getMessages);

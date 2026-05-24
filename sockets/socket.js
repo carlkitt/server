@@ -55,6 +55,9 @@ module.exports = (io) => {
         
         // Broadcast updated online users list
         io.emit('onlineUsers', Array.from(online.keys()));
+        
+        // Broadcast individual user online event
+        io.emit('user:online', { userId: String(socket.userId) });
       }
 
       /**
@@ -226,6 +229,32 @@ module.exports = (io) => {
       });
 
       /**
+       * Request presence status for list of users
+       * Responds with user_online for each online user
+       */
+      socket.on('get_presence', (data) => {
+        try {
+          const { userIds } = data;
+          
+          if (!Array.isArray(userIds)) {
+            return;
+          }
+
+          console.log(`📡 get_presence request for users: ${userIds.join(', ')}`);
+
+          // Send individual user:online event for each online user
+          userIds.forEach((userId) => {
+            if (online.has(String(userId))) {
+              socket.emit('user:online', { userId: String(userId) });
+              console.log(`   ✅ User ${userId} is online`);
+            }
+          });
+        } catch (err) {
+          console.error('get_presence error:', err);
+        }
+      });
+
+      /**
        * Mark messages as read
        */
       socket.on('markAsRead', async (data) => {
@@ -274,6 +303,9 @@ module.exports = (io) => {
             
             // Broadcast updated online users
             io.emit('onlineUsers', Array.from(online.keys()));
+            
+            // Broadcast individual user offline event
+            io.emit('user:offline', { userId: String(userId) });
             
             console.log(`User ${userId} disconnected`);
           }

@@ -73,3 +73,194 @@ exports.listPosts = async (req, res) => {
     res.status(500).json({ msg: 'Server error' });
   }
 };
+
+// Like a post
+exports.likePost = async (req, res) => {
+  try {
+    const { id: postId } = req.params;
+    const userId = req.userId;
+    const io = req.io;
+
+    if (!postId) {
+      return res.status(400).json({ msg: 'Post ID required' });
+    }
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ msg: 'Post not found' });
+    }
+
+    // Check if user already liked
+    if (post.likes.includes(userId)) {
+      return res.status(400).json({ msg: 'Already liked' });
+    }
+
+    post.likes.push(userId);
+    await post.save();
+
+    // Broadcast like event to all connected clients
+    if (io) {
+      io.emit('post:liked', {
+        postId: post._id,
+        likes: post.likes.length,
+        userId: userId
+      });
+    }
+
+    res.json({ msg: 'Post liked', likes: post.likes.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// Unlike a post
+exports.unlikePost = async (req, res) => {
+  try {
+    const { id: postId } = req.params;
+    const userId = req.userId;
+    const io = req.io;
+
+    if (!postId) {
+      return res.status(400).json({ msg: 'Post ID required' });
+    }
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ msg: 'Post not found' });
+    }
+
+    // Check if user liked
+    const likeIndex = post.likes.indexOf(userId);
+    if (likeIndex === -1) {
+      return res.status(400).json({ msg: 'Not liked' });
+    }
+
+    post.likes.splice(likeIndex, 1);
+    await post.save();
+
+    // Broadcast unlike event to all connected clients
+    if (io) {
+      io.emit('post:unliked', {
+        postId: post._id,
+        likes: post.likes.length,
+        userId: userId
+      });
+    }
+
+    res.json({ msg: 'Post unliked', likes: post.likes.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// Comment on a post
+exports.commentOnPost = async (req, res) => {
+  try {
+    const { id: postId } = req.params;
+    const { text } = req.body;
+    const userId = req.userId;
+    const io = req.io;
+
+    if (!postId || !text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ msg: 'Post ID and comment text required' });
+    }
+
+    if (text.length > 500) {
+      return res.status(400).json({ msg: 'Comment too long' });
+    }
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ msg: 'Post not found' });
+    }
+
+    const newComment = {
+      user: userId,
+      text: text.trim(),
+      createdAt: new Date()
+    };
+
+    post.comments.push(newComment);
+    await post.save();
+    await post.populate('comments.user', 'name username avatar');
+
+    // Broadcast comment event to all connected clients
+    if (io) {
+      io.emit('post:commented', {
+        postId: post._id,
+        comments: post.comments.length,
+        userId: userId,
+        comment: {
+          text: newComment.text,
+          createdAt: newComment.createdAt,
+          user: { _id: userId }
+        }
+      });
+    }
+
+    res.status(201).json({ msg: 'Comment added', comments: post.comments.length, comment: newComment });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// Get post details with likes/comments
+exports.getPost = async (req, res) => {
+  try {
+    const { id: postId } = req.params;
+
+    const post = await Post.findById(postId)
+      .populate('userId', 'name username avatar email')
+      .populate('likes', 'name username avatar')
+      .populate('comments.user', 'name username avatar');
+
+    if (!post) {
+      return res.status(404).json({ msg: 'Post not found' });
+    }
+
+    res.json(post);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// Share post (increment share counter - optional, just for tracking)
+exports.sharePost = async (req, res) => {
+  try {
+    const { id: postId } = req.params;
+    const userId = req.userId;
+    const io = req.io;
+
+    if (!postId) {
+      return res.status(400).json({ msg: 'Post ID required' });
+    }
+
+    const post = await Post.findByIdAndUpdate(
+      postId,
+      { $inc: { shares: 1 } },
+      { new: true }
+    );
+
+    if (!post) {
+      return res.status(404).json({ msg: 'Post not found' });
+    }
+
+    // Broadcast share event to all connected clients
+    if (io) {
+      io.emit('post:shared', {
+        postId: post._id,
+        shares: post.shares || 0,
+        userId: userId
+      });
+    }
+
+    res.json({ msg: 'Post shared', shares: post.shares || 0 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};

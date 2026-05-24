@@ -13,6 +13,7 @@ const PostSchema = new mongoose.Schema({
     text: String,
     createdAt: { type: Date, default: Date.now }
   }],
+  shares: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
 
