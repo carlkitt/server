@@ -17,6 +17,7 @@ const messageRoutes = require('./routes/messageRoutes');
 const skillRoutes = require('./routes/skillRoutes');
 
 const app = express();
+const server = http.createServer(app);
 
 // Security middleware
 app.use(helmet());
@@ -71,54 +72,10 @@ app.use(limiter);
 // Serve static files from uploads folder
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// 404 handler (before routes are registered)
-const setupRoutes = (io) => {
-  // Middleware to attach io to request
-  app.use((req, res, next) => {
-    req.io = io;
-    next();
-  });
-
-  // Routes
-  app.use('/api/auth', authLimiter, authRoutes);
-  app.use('/api/users', userRoutes);
-  app.use('/api/posts', postRoutes);
-  app.use('/api/messages', messageRoutes);
-  app.use('/api/skills', skillRoutes);
-
-  // Basic root
-  app.get('/', (req, res) => res.send({ ok: true, message: 'SkillLink API' }));
-
-  // Error handler middleware
-  app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    
-    // Don't expose internal error details
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(err.status || 500).json({ message: 'Internal server error' });
-    }
-    
-    res.status(err.status || 500).json({ 
-      message: err.message,
-      ...(process.env.NODE_ENV !== 'production' && { error: err })
-    });
-  });
-
-  // 404 handler
-  app.use((req, res) => {
-    res.status(404).json({ message: 'Route not found' });
-  });
-};
-
-// Connect DB and start server
-const PORT = process.env.PORT || 5000;
-
-// Initialize server on module load
-let dbConnected = false;
-
-connectDB().then(() => {
-  dbConnected = true;
-  const io = new Server(server, {
+// Initialize Socket.io
+let io;
+try {
+  io = new Server(server, {
     cors: corsOptions,
     transports: ['websocket', 'polling'],
     pingInterval: 25000,
@@ -126,10 +83,53 @@ connectDB().then(() => {
   });
   
   require('./sockets/socket')(io);
+} catch (err) {
+  console.error('Failed to initialize Socket.io:', err);
+  io = null;
+}
 
-  // Setup routes AFTER io is created
-  setupRoutes(io);
+// Middleware to attach io to request
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
 
+// Routes
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/skills', skillRoutes);
+
+// Basic root
+app.get('/', (req, res) => res.send({ ok: true, message: 'SkillLink API' }));
+
+// Error handler middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  
+  // Don't expose internal error details
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(err.status || 500).json({ message: 'Internal server error' });
+  }
+  
+  res.status(err.status || 500).json({ 
+    message: err.message,
+    ...(process.env.NODE_ENV !== 'production' && { error: err })
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ message: 'Route not found' });
+});
+
+// Connect DB and start server
+const PORT = process.env.PORT || 5000;
+
+connectDB().then(() => {
+  console.log('Database connected');
+  
   // Only listen if not in Vercel environment
   if (!process.env.VERCEL) {
     server.listen(PORT, () => {
@@ -138,7 +138,7 @@ connectDB().then(() => {
     });
   }
 }).catch(err => {
-  console.error('Failed to start server', err);
+  console.error('Failed to connect database:', err);
   if (!process.env.VERCEL) {
     process.exit(1);
   }
