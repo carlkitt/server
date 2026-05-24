@@ -69,9 +69,6 @@ const authLimiter = rateLimit({
 });
 app.use(limiter);
 
-// Serve static files from uploads folder
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 // Initialize Socket.io
 let io;
 try {
