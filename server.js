@@ -65,7 +65,13 @@ const limiter = rateLimit({
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5 // stricter limit for auth attempts
+  max: 20, // Increased from 5 to 20 login attempts per 15 minutes
+  standardHeaders: false,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Don't rate limit in development
+    return process.env.NODE_ENV !== 'production';
+  },
 });
 app.use(limiter);
 
