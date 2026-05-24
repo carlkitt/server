@@ -92,7 +92,7 @@ try {
 app.use((req, res, next) => {
   req.io = io;
   next();
-});
+}); 
 
 // Routes
 app.use('/api/auth', authLimiter, authRoutes);
