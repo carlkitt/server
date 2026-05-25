@@ -13,6 +13,5 @@ router.put('/profile', auth, userController.updateProfile);
 router.put('/:id', auth, userController.updateUser);
 router.post('/upload-avatar', auth, upload.single('avatar'), userController.uploadAvatar);
 router.post('/upload-cover', auth, upload.single('coverPhoto'), userController.uploadCoverPhoto);
-router.get('/search', userController.searchUsers);
 
 module.exports = router;
