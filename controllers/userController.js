@@ -192,3 +192,110 @@ exports.uploadCoverPhoto = async (req, res) => {
     res.status(500).json({ message: 'Failed to upload cover photo' });
   }
 };
+
+exports.followUser = async (req, res) => {
+  try {
+    const currentUserId = req.userId; // User making the request
+    const { id: targetUserId } = req.params; // User to follow
+
+    if (currentUserId === targetUserId) {
+      return res.status(400).json({ message: 'Cannot follow yourself' });
+    }
+
+    const currentUser = await User.findById(currentUserId);
+    const targetUser = await User.findById(targetUserId);
+
+    if (!currentUser) {
+      return res.status(404).json({ message: 'Current user not found' });
+    }
+
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Initialize arrays if they don't exist
+    if (!currentUser.following) currentUser.following = [];
+    if (!targetUser.followers) targetUser.followers = [];
+
+    // Check if already following
+    if (currentUser.following.some(id => id.toString() === targetUserId)) {
+      return res.status(400).json({ message: 'Already following this user' });
+    }
+
+    // Add to following list
+    currentUser.following.push(targetUserId);
+    currentUser.followingCount = currentUser.following.length;
+
+    // Add to followers list
+    targetUser.followers.push(currentUserId);
+    targetUser.followersCount = targetUser.followers.length;
+
+    await currentUser.save();
+    await targetUser.save();
+
+    res.json({ message: 'User followed successfully' });
+  } catch (err) {
+    console.error('followUser error:', err);
+    res.status(500).json({ message: 'Failed to follow user' });
+  }
+};
+
+exports.unfollowUser = async (req, res) => {
+  try {
+    const currentUserId = req.userId;
+    const { id: targetUserId } = req.params;
+
+    const currentUser = await User.findById(currentUserId);
+    const targetUser = await User.findById(targetUserId);
+
+    if (!currentUser) {
+      return res.status(404).json({ message: 'Current user not found' });
+    }
+
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Initialize arrays if they don't exist
+    if (!currentUser.following) currentUser.following = [];
+    if (!targetUser.followers) targetUser.followers = [];
+
+    // Remove from following list
+    currentUser.following = currentUser.following.filter(id => id.toString() !== targetUserId);
+    currentUser.followingCount = currentUser.following.length;
+
+    // Remove from followers list
+    targetUser.followers = targetUser.followers.filter(id => id.toString() !== currentUserId);
+    targetUser.followersCount = targetUser.followers.length;
+
+    await currentUser.save();
+    await targetUser.save();
+
+    res.json({ message: 'User unfollowed successfully' });
+  } catch (err) {
+    console.error('unfollowUser error:', err);
+    res.status(500).json({ message: 'Failed to unfollow user' });
+  }
+};
+
+exports.isFollowing = async (req, res) => {
+  try {
+    const currentUserId = req.userId;
+    const { id: targetUserId } = req.params;
+
+    const currentUser = await User.findById(currentUserId);
+    if (!currentUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const isFollowing = currentUser.following && currentUser.following.length > 0
+      ? currentUser.following.some(id => id.toString() === targetUserId)
+      : false;
+
+    res.json({ isFollowing });
+  } catch (err) {
+    console.error('isFollowing error:', err);
+    res.status(500).json({ message: 'Failed to check follow status' });
+  }
+};
+

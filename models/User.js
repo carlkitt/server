@@ -19,6 +19,10 @@ const UserSchema = new mongoose.Schema({
   locationName: { type: String }, // Store the location name separately
   rating: { type: Number, default: 5 },
   verified: { type: Boolean, default: false },
+  followersCount: { type: Number, default: 0 },
+  followingCount: { type: Number, default: 0 },
+  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   createdAt: { type: Date, default: Date.now }
 });
 
