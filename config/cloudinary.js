@@ -19,11 +19,11 @@ const uploadBase64Image = async (base64String, filename) => {
     // Upload to Cloudinary
     const result = await cloudinary.uploader.upload(`data:image/jpeg;base64,${base64String}`, {
       public_id: filename,
-      folder: 'skilllink/posts',
+      folder: 'skilllink/profiles',
       resource_type: 'auto',
     });
 
-    return result.secure_url;
+    return result;
   } catch (err) {
     console.error('Error uploading to Cloudinary:', err);
     return null;

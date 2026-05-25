@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { uploadBase64Image } = require('../config/cloudinary');
 
 exports.getUser = async (req, res) => {
   try {
@@ -101,5 +102,93 @@ exports.updateProfile = async (req, res) => {
   } catch (err) {
     console.error('updateProfile error:', err);
     res.status(500).json({ message: 'Failed to update profile' });
+  }
+};
+
+exports.uploadAvatar = async (req, res) => {
+  try {
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const userId = req.userId; // From auth middleware
+    console.log(`📸 uploadAvatar request from user ${userId}`);
+
+    // Convert buffer to base64
+    const base64 = req.file.buffer.toString('base64');
+    const filename = `avatar_${userId}_${Date.now()}`;
+
+    // Upload to Cloudinary
+    console.log(`⬆️ Uploading to Cloudinary with filename: ${filename}`);
+    const result = await uploadBase64Image(base64, filename);
+    
+    if (!result || !result.secure_url) {
+      console.error('❌ Cloudinary upload failed:', result);
+      return res.status(500).json({ message: 'Failed to upload image to Cloudinary' });
+    }
+
+    console.log(`✅ Cloudinary upload successful: ${result.secure_url}`);
+
+    // Update user's profile picture in database
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { profilePicture: result.secure_url },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    console.log(`✅ User profile picture updated in database`);
+    res.json(user);
+  } catch (err) {
+    console.error('uploadAvatar error:', err);
+    res.status(500).json({ message: 'Failed to upload avatar' });
+  }
+};
+
+exports.uploadCoverPhoto = async (req, res) => {
+  try {
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const userId = req.userId; // From auth middleware
+    console.log(`🖼️ uploadCoverPhoto request from user ${userId}`);
+
+    // Convert buffer to base64
+    const base64 = req.file.buffer.toString('base64');
+    const filename = `cover_${userId}_${Date.now()}`;
+
+    // Upload to Cloudinary
+    console.log(`⬆️ Uploading to Cloudinary with filename: ${filename}`);
+    const result = await uploadBase64Image(base64, filename);
+    
+    if (!result || !result.secure_url) {
+      console.error('❌ Cloudinary upload failed:', result);
+      return res.status(500).json({ message: 'Failed to upload image to Cloudinary' });
+    }
+
+    console.log(`✅ Cloudinary upload successful: ${result.secure_url}`);
+
+    // Update user's cover photo in database
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { coverPhoto: result.secure_url },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    console.log(`✅ User cover photo updated in database`);
+    res.json(user);
+  } catch (err) {
+    console.error('uploadCoverPhoto error:', err);
+    res.status(500).json({ message: 'Failed to upload cover photo' });
   }
 };
