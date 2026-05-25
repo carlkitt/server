@@ -19,7 +19,7 @@ exports.getConversations = async (req, res) => {
       .populate('members', 'name username profilePicture')
       .populate({
         path: 'lastMessage',
-        populate: { path: 'senderId', select: 'name username' }
+        populate: { path: 'senderId', select: 'name username profilePicture' }
       })
       .sort({ updatedAt: -1 })
       .lean();

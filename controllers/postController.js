@@ -31,8 +31,8 @@ exports.createPost = async (req, res) => {
     });
     await post.save();
     
-    // Populate user data before sending response
-    await post.populate('userId', 'name username avatar email');
+    // Populate user data including profilePicture
+    await post.populate('userId', 'name username avatar profilePicture email');
     
     res.status(201).json(post);
   } catch (err) {
@@ -45,7 +45,7 @@ exports.listPosts = async (req, res) => {
   try {
     const userId = req.userId; // Current user ID (can be null for unauthenticated)
     const posts = await Post.find()
-      .populate('userId', 'name username avatar email') // Populate user data
+      .populate('userId', 'name username avatar profilePicture email') // Include profilePicture
       .sort({ createdAt: -1 })
       .limit(50);
     
@@ -205,7 +205,7 @@ exports.getPost = async (req, res) => {
     const userId = req.userId;
 
     const post = await Post.findById(postId)
-      .populate('userId', 'name username avatar email')
+      .populate('userId', 'name username avatar profilePicture email')
       .populate('likes', 'name username avatar')
       .populate('comments.user', 'name username avatar');
 
