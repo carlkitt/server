@@ -8,13 +8,19 @@ const { Readable } = require('stream');
 // Configure multer for memory storage
 const upload = multer({ storage: multer.memoryStorage() });
 
-router.get('/:id', auth, userController.getUser);
+// Specific routes first (before /:id)
 router.put('/profile', auth, userController.updateProfile);
-router.put('/:id', auth, userController.updateUser);
 router.post('/upload-avatar', auth, upload.single('avatar'), userController.uploadAvatar);
 router.post('/upload-cover', auth, upload.single('coverPhoto'), userController.uploadCoverPhoto);
+
+// User ID parameter routes
 router.post('/:id/follow', auth, userController.followUser);
 router.post('/:id/unfollow', auth, userController.unfollowUser);
 router.get('/:id/is-following', auth, userController.isFollowing);
 
+// Generic ID routes last
+router.get('/:id', auth, userController.getUser);
+router.put('/:id', auth, userController.updateUser);
+
 module.exports = router;
+
