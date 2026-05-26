@@ -150,7 +150,7 @@ exports.unlikePost = async (req, res) => {
 exports.commentOnPost = async (req, res) => {
   try {
     const { id: postId } = req.params;
-    const { text } = req.body;
+    const { text, parentId } = req.body;
     const userId = req.userId;
     const io = req.io;
 
@@ -167,9 +167,18 @@ exports.commentOnPost = async (req, res) => {
       return res.status(404).json({ msg: 'Post not found' });
     }
 
+    // Validate parentId if provided (for replies)
+    if (parentId) {
+      const parentComment = post.comments.id(parentId);
+      if (!parentComment) {
+        return res.status(404).json({ msg: 'Parent comment not found' });
+      }
+    }
+
     const newComment = {
       user: userId,
       text: text.trim(),
+      parentId: parentId || null,
       createdAt: new Date()
     };
 
@@ -184,7 +193,9 @@ exports.commentOnPost = async (req, res) => {
         comments: post.comments.length,
         userId: userId,
         comment: {
+          _id: post.comments[post.comments.length - 1]._id,
           text: newComment.text,
+          parentId: newComment.parentId,
           createdAt: newComment.createdAt,
           user: { _id: userId }
         }

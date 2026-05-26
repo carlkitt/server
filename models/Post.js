@@ -11,6 +11,7 @@ const PostSchema = new mongoose.Schema({
   comments: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     text: String,
+    parentId: { type: mongoose.Schema.Types.ObjectId, default: null },
     createdAt: { type: Date, default: Date.now }
   }],
   shares: { type: Number, default: 0 },
