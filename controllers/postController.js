@@ -184,7 +184,7 @@ exports.commentOnPost = async (req, res) => {
 
     post.comments.push(newComment);
     await post.save();
-    await post.populate('comments.user', 'name username avatar');
+    await post.populate('comments.user', 'name username avatar profilePicture');
 
     // Broadcast comment event to all connected clients
     if (io) {
@@ -218,7 +218,7 @@ exports.getPost = async (req, res) => {
     const post = await Post.findById(postId)
       .populate('userId', 'name username avatar profilePicture coverPhoto email')
       .populate('likes', 'name username avatar')
-      .populate('comments.user', 'name username avatar');
+      .populate('comments.user', 'name username avatar profilePicture');
 
     if (!post) {
       return res.status(404).json({ msg: 'Post not found' });
@@ -248,7 +248,7 @@ exports.getComments = async (req, res) => {
     const post = await Post.findById(postId)
       .populate({
         path: 'comments.user',
-        select: 'name username avatar _id'
+        select: 'name username avatar profilePicture _id'
       });
 
     if (!post) {
