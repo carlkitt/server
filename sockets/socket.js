@@ -3,35 +3,18 @@ const Message = require('../models/Message');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
-/**
- * WebSocket Socket.IO Server Handler
- * Manages real-time messaging, typing indicators, and online status
- */
 module.exports = (io) => {
-  // Track online users: userId -> socketId
   const online = new Map();
-  // Track user rooms/conversations: userId -> Set of conversationIds
   const userRooms = new Map();
 
-  /**
-   * Middleware: Authenticate socket connection with JWT
-   */
   io.use((socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
-      
-      if (!token) {
-        return next(new Error('No token provided'));
-      }
+      if (!token) return next(new Error('No token provided'));
 
-      // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-      
-      if (!decoded.userId) {
-        return next(new Error('Invalid token format'));
-      }
+      if (!decoded.userId) return next(new Error('Invalid token format'));
 
-      // Attach user ID to socket for later use
       socket.userId = decoded.userId;
       next();
     } catch (err) {
@@ -46,23 +29,36 @@ module.exports = (io) => {
     console.log(`   Total connections: ${io.engine.clientsCount}`);
 
     try {
-      // Track online user
       if (socket.userId) {
         online.set(String(socket.userId), socket.id);
         userRooms.set(String(socket.userId), new Set());
-        
+
         console.log(`👤 User ${socket.userId} connected`);
-        
-        // Broadcast updated online users list
         io.emit('onlineUsers', Array.from(online.keys()));
-        
-        // Broadcast individual user online event
         io.emit('user:online', { userId: String(socket.userId) });
       }
 
       /**
+       * Join personal user room — called by Flutter client on connect.
+       * This is the key room used for delivering notifications when the
+       * user is not inside a conversation screen.
+       */
+      socket.on('user:join', (data) => {
+        try {
+          const { userId } = data;
+          if (!userId || userId !== socket.userId) {
+            console.log(`⚠️ user:join rejected — userId mismatch`);
+            return;
+          }
+          socket.join(String(userId));
+          console.log(`🏠 User ${userId} joined personal room`);
+        } catch (err) {
+          console.error('user:join error:', err);
+        }
+      });
+
+      /**
        * Join conversation room
-       * Allows user to receive real-time messages for this conversation
        */
       socket.on('joinConversation', async (data) => {
         try {
@@ -73,13 +69,11 @@ module.exports = (io) => {
           console.log(`   conversationId: ${conversationId}`);
           console.log(`   userId: ${userId}`);
 
-          // Validate input
           if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) {
             console.log('❌ Invalid conversation ID');
             return socket.emit('error', { message: 'Invalid conversation ID' });
           }
 
-          // Verify user is member of conversation
           const conversation = await Conversation.findById(conversationId);
           if (!conversation) {
             console.log('❌ Conversation not found');
@@ -91,7 +85,6 @@ module.exports = (io) => {
             return socket.emit('error', { message: 'Not authorized to join this conversation' });
           }
 
-          // Join room
           socket.join(String(conversationId));
           const rooms = userRooms.get(String(userId)) || new Set();
           rooms.add(String(conversationId));
@@ -118,9 +111,7 @@ module.exports = (io) => {
 
           socket.leave(String(conversationId));
           const rooms = userRooms.get(String(userId));
-          if (rooms) {
-            rooms.delete(String(conversationId));
-          }
+          if (rooms) rooms.delete(String(conversationId));
 
           console.log(`User ${userId} left conversation ${conversationId}`);
           socket.emit('leftConversation', { conversationId });
@@ -130,15 +121,13 @@ module.exports = (io) => {
       });
 
       /**
-       * Send message in real-time
-       * Validates user is conversation member before broadcasting
+       * Send message via WebSocket
        */
       socket.on('sendMessage', async (data) => {
         try {
           const { conversationId, text } = data;
           const senderId = socket.userId;
 
-          // Validate input
           if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) {
             return socket.emit('error', { message: 'Invalid conversation ID' });
           }
@@ -151,7 +140,6 @@ module.exports = (io) => {
             return socket.emit('error', { message: 'Message too long' });
           }
 
-          // Verify user is member of conversation
           const conversation = await Conversation.findById(conversationId);
           if (!conversation) {
             return socket.emit('error', { message: 'Conversation not found' });
@@ -161,7 +149,6 @@ module.exports = (io) => {
             return socket.emit('error', { message: 'Not authorized to send messages in this conversation' });
           }
 
-          // Save message to database
           const message = new Message({
             conversationId,
             senderId,
@@ -172,23 +159,31 @@ module.exports = (io) => {
           await message.save();
           await message.populate('senderId', 'name username profilePicture');
 
-          // Update conversation
           await Conversation.findByIdAndUpdate(
             conversationId,
-            {
-              lastMessage: message._id,
-              updatedAt: new Date()
-            }
+            { lastMessage: message._id, updatedAt: new Date() }
           );
 
-          // Broadcast message to all users in conversation room
-          io.to(String(conversationId)).emit('message:new', {
+          const messageData = {
             _id: message._id,
             conversationId: message.conversationId,
             senderId: message.senderId,
             text: message.text,
             seen: message.seen,
             createdAt: message.createdAt
+          };
+
+          // Emit to conversation room (users currently in chat screen)
+          io.to(String(conversationId)).emit('message:new', messageData);
+
+          // Also emit to each member's personal user room so they get
+          // notified even when not in the conversation screen
+          conversation.members.forEach(memberId => {
+            const memberIdStr = memberId.toString();
+            if (memberIdStr !== String(senderId)) {
+              io.to(memberIdStr).emit('message:new', messageData);
+              console.log(`📡 Notified member ${memberIdStr} via personal room`);
+            }
           });
 
           console.log(`Message sent in conversation ${conversationId}`);
@@ -199,25 +194,18 @@ module.exports = (io) => {
       });
 
       /**
-       * Send typing indicator
-       * Notifies other users that this user is typing
+       * Typing indicator
        */
       socket.on('typing', async (data) => {
         try {
           const { conversationId, isTyping } = data;
           const userId = socket.userId;
 
-          if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) {
-            return;
-          }
+          if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) return;
 
-          // Verify user is member before broadcasting
           const conversation = await Conversation.findById(conversationId);
-          if (!conversation || !conversation.members.includes(userId)) {
-            return;
-          }
+          if (!conversation || !conversation.members.includes(userId)) return;
 
-          // Broadcast typing status to all in room except sender
           socket.to(String(conversationId)).emit('userTyping', {
             conversationId,
             userId,
@@ -229,20 +217,14 @@ module.exports = (io) => {
       });
 
       /**
-       * Request presence status for list of users
-       * Responds with user_online for each online user
+       * Get presence status for a list of users
        */
       socket.on('get_presence', (data) => {
         try {
           const { userIds } = data;
-          
-          if (!Array.isArray(userIds)) {
-            return;
-          }
+          if (!Array.isArray(userIds)) return;
 
           console.log(`📡 get_presence request for users: ${userIds.join(', ')}`);
-
-          // Send individual user:online event for each online user
           userIds.forEach((userId) => {
             if (online.has(String(userId))) {
               socket.emit('user:online', { userId: String(userId) });
@@ -262,27 +244,16 @@ module.exports = (io) => {
           const { conversationId } = data;
           const userId = socket.userId;
 
-          if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) {
-            return;
-          }
+          if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) return;
 
-          // Verify user is member of conversation
           const conversation = await Conversation.findById(conversationId);
-          if (!conversation || !conversation.members.includes(userId)) {
-            return;
-          }
+          if (!conversation || !conversation.members.includes(userId)) return;
 
-          // Mark messages as read
           await Message.updateMany(
-            {
-              conversationId,
-              seen: false,
-              senderId: { $ne: userId }
-            },
+            { conversationId, seen: false, senderId: { $ne: userId } },
             { seen: true }
           );
 
-          // Notify others that messages were read
           io.to(String(conversationId)).emit('messagesRead', { conversationId, userId });
         } catch (err) {
           console.error('markAsRead error:', err);
@@ -290,23 +261,16 @@ module.exports = (io) => {
       });
 
       /**
-       * Handle disconnection
-       * Remove user from online list
+       * Disconnect
        */
       socket.on('disconnect', () => {
         try {
           const userId = socket.userId;
-          
           if (userId) {
             online.delete(String(userId));
             userRooms.delete(String(userId));
-            
-            // Broadcast updated online users
             io.emit('onlineUsers', Array.from(online.keys()));
-            
-            // Broadcast individual user offline event
             io.emit('user:offline', { userId: String(userId) });
-            
             console.log(`User ${userId} disconnected`);
           }
         } catch (err) {
@@ -314,12 +278,10 @@ module.exports = (io) => {
         }
       });
 
-      /**
-       * Handle connection errors
-       */
       socket.on('error', (error) => {
         console.error('Socket error:', error);
       });
+
     } catch (err) {
       console.error('Connection handler error:', err);
       socket.disconnect(true);
