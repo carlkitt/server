@@ -23,7 +23,8 @@ const uploadBase64Image = async (base64String, filename) => {
       resource_type: 'auto',
     });
 
-    return result;
+    // ✅ Return only the secure URL string, not the whole object
+    return result.secure_url;
   } catch (err) {
     console.error('Error uploading to Cloudinary:', err);
     return null;
