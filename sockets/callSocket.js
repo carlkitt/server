@@ -43,8 +43,9 @@ module.exports = (io) => {
         startedAt: new Date()
       });
 
-      // Notify callee
-      io.to(`user:${calleeId}`).emit('call:incoming', {
+      // Notify callee - use calleeId directly (matches main socket.js user:join room name)
+      console.log(`📤 Sending call:incoming to room: ${calleeId}`);
+      io.to(calleeId).emit('call:incoming', {
         callId,
         callerId: userId,
         callerName,
@@ -66,7 +67,7 @@ module.exports = (io) => {
       call.status = 'active';
       console.log(`✅ Call ${callId} answered`);
 
-      io.to(`user:${call.callerId}`).emit('call:answered', { callId, answer });
+      io.to(call.callerId).emit('call:answered', { callId, answer });
     });
 
     // ── Reject call ────────────────────────────────────────────────────────────
@@ -78,7 +79,7 @@ module.exports = (io) => {
       console.log(`❌ Call ${callId} rejected`);
       activeCalls.delete(callId);
 
-      io.to(`user:${call.callerId}`).emit('call:rejected', { callId, reason: reason || 'declined' });
+      io.to(call.callerId).emit('call:rejected', { callId, reason: reason || 'declined' });
     });
 
     // ── End call ───────────────────────────────────────────────────────────────
@@ -91,14 +92,14 @@ module.exports = (io) => {
       activeCalls.delete(callId);
 
       // Notify both parties
-      io.to(`user:${call.callerId}`).emit('call:ended', { callId });
-      io.to(`user:${call.calleeId}`).emit('call:ended', { callId });
+      io.to(call.callerId).emit('call:ended', { callId });
+      io.to(call.calleeId).emit('call:ended', { callId });
     });
 
     // ── ICE candidate exchange ─────────────────────────────────────────────────
     socket.on('call:ice-candidate', (data) => {
       const { callId, candidate, targetUserId } = data;
-      io.to(`user:${targetUserId}`).emit('call:ice-candidate', {
+      io.to(targetUserId).emit('call:ice-candidate', {
         callId,
         candidate,
         fromUserId: userId
@@ -112,7 +113,7 @@ module.exports = (io) => {
       if (!call) return;
 
       activeCalls.delete(callId);
-      io.to(`user:${call.calleeId}`).emit('call:cancelled', { callId });
+      io.to(call.calleeId).emit('call:cancelled', { callId });
       console.log(`🚫 Call ${callId} cancelled by caller`);
     });
 
@@ -124,7 +125,7 @@ module.exports = (io) => {
       for (const [callId, call] of activeCalls.entries()) {
         if (call.callerId === userId || call.calleeId === userId) {
           const otherId = call.callerId === userId ? call.calleeId : call.callerId;
-          io.to(`user:${otherId}`).emit('call:ended', { callId, reason: 'disconnected' });
+          io.to(otherId).emit('call:ended', { callId, reason: 'disconnected' });
           activeCalls.delete(callId);
         }
       }
