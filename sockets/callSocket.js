@@ -68,7 +68,9 @@ module.exports = (io) => {
 
       call.status = 'active';
       console.log(`✅ Call ${callId} answered`);
+      console.log(`📤 Sending answer to caller: ${call.callerId}`);
 
+      // Send answer with the actual answer data, not just a string
       io.to(call.callerId).emit('call:answered', { callId, answer });
     });
 
@@ -101,6 +103,7 @@ module.exports = (io) => {
     // ── ICE candidate exchange ─────────────────────────────────────────────────
     socket.on('call:ice-candidate', (data) => {
       const { callId, candidate, targetUserId } = data;
+      console.log(`🧊 Forwarding ICE candidate for call ${callId} to ${targetUserId}`);
       io.to(targetUserId).emit('call:ice-candidate', {
         callId,
         candidate,
