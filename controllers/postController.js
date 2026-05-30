@@ -1,6 +1,9 @@
 const Post = require('../models/Post');
 const { uploadBase64Image } = require('../config/cloudinary');
 
+// Helper function for debug logging
+const debugLog = (message) => console.log(message);
+
 exports.createPost = async (req, res) => {
   try {
     const { type, content, images, location, skills } = req.body;
