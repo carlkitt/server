@@ -47,7 +47,7 @@ exports.listPosts = async (req, res) => {
     
     // Get pagination parameters from query
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 15;
+    const limit = parseInt(req.query.limit) || 2; // Default to 2 posts per page (reduced for rate limiting on free tier)
     const skip = (page - 1) * limit;
     
     debugLog(`📄 Fetching posts: page=${page}, limit=${limit}, skip=${skip}`);

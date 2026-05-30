@@ -43,9 +43,11 @@ module.exports = (io) => {
         startedAt: new Date()
       });
 
-      // Notify callee - use calleeId directly (matches main socket.js user:join room name)
-      console.log(`📤 Sending call:incoming to room: ${calleeId}`);
-      io.to(calleeId).emit('call:incoming', {
+      // Send call notification through notification channel (not call:incoming socket event)
+      // This way it will trigger a system notification on the receiver's phone
+      console.log(`📤 Sending call notification to: ${calleeId}`);
+      io.to(calleeId).emit('call:notification', {
+        type: 'incoming_call',
         callId,
         callerId: userId,
         callerName,
