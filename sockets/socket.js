@@ -2,6 +2,7 @@ const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const callSocketHandler = require('./callSocket');
 
 module.exports = (io) => {
   const online = new Map();
@@ -287,4 +288,7 @@ module.exports = (io) => {
       socket.disconnect(true);
     }
   });
+
+  // ── Initialize call socket handlers ────────────────────────────────────────
+  callSocketHandler(io);
 };

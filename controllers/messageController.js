@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 /**
  * Get all conversations for authenticated user
  * Only returns conversations where user is a member
+ * Supports pagination with page and limit query parameters
  */
 exports.getConversations = async (req, res) => {
   try {
@@ -15,6 +16,13 @@ exports.getConversations = async (req, res) => {
       return res.status(400).json({ message: 'Invalid user ID' });
     }
 
+    // Get pagination parameters from query
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 15;
+    const skip = (page - 1) * limit;
+
+    console.log(`📄 Fetching conversations: page=${page}, limit=${limit}, skip=${skip}`);
+
     const conversations = await Conversation.find({ members: userId })
       .populate('members', 'name username profilePicture')
       .populate({
@@ -22,8 +30,11 @@ exports.getConversations = async (req, res) => {
         populate: { path: 'senderId', select: 'name username profilePicture' }
       })
       .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .lean();
 
+    console.log(`✅ Found ${conversations.length} conversations for page ${page}`);
     res.status(200).json(conversations);
   } catch (err) {
     console.error('getConversations error:', err);

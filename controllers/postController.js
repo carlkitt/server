@@ -44,10 +44,21 @@ exports.createPost = async (req, res) => {
 exports.listPosts = async (req, res) => {
   try {
     const userId = req.userId; // Current user ID (can be null for unauthenticated)
+    
+    // Get pagination parameters from query
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 15;
+    const skip = (page - 1) * limit;
+    
+    debugLog(`📄 Fetching posts: page=${page}, limit=${limit}, skip=${skip}`);
+    
     const posts = await Post.find()
-      .populate('userId', 'name username avatar profilePicture coverPhoto email') // Include profilePicture and coverPhoto
+      .populate('userId', 'name username avatar profilePicture coverPhoto email')
       .sort({ createdAt: -1 })
-      .limit(50);
+      .skip(skip)
+      .limit(limit);
+    
+    debugLog(`✅ Found ${posts.length} posts for page ${page}`);
     
     // Add 'liked' field to each post indicating if current user has liked it
     const postsWithLiked = posts.map(post => {
@@ -278,6 +289,7 @@ exports.getComments = async (req, res) => {
 exports.sharePost = async (req, res) => {
   try {
     const { id: postId } = req.params;
+    const { caption } = req.body;
     const userId = req.userId;
     const io = req.io;
 
@@ -300,11 +312,12 @@ exports.sharePost = async (req, res) => {
       io.emit('post:shared', {
         postId: post._id,
         shares: post.shares || 0,
-        userId: userId
+        userId: userId,
+        caption: caption || null
       });
     }
 
-    res.json({ msg: 'Post shared', shares: post.shares || 0 });
+    res.json({ msg: 'Post shared', shares: post.shares || 0, caption });
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: 'Server error' });

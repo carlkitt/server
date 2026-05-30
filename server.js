@@ -61,11 +61,11 @@ app.use(express.urlencoded({ limit: '50mb' }));
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 1000 // limit each IP to 1000 requests per windowMs (increased for heavy usage)
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20 // stricter limit for auth attempts
+  max: 100 // increased limit for auth attempts
 });
 app.use(limiter);
 
