@@ -8,7 +8,6 @@ exports.createPost = async (req, res) => {
   try {
     const { type, content, images, location, skills } = req.body;
     
-    // Validate required fields
     if (!content || !content.trim()) {
       return res.status(400).json({ msg: 'Content is required' });
     }
@@ -17,21 +16,18 @@ exports.createPost = async (req, res) => {
       return res.status(400).json({ msg: 'At least one skill tag is required' });
     }
     
-    // Validate location-dependent posts
     if ((type === 'shop' || type === 'wanted') && !location) {
       return res.status(400).json({ msg: 'Location is required for this post type' });
     }
     
     console.log(`📝 Creating ${type} post for user: ${req.userId}`);
     
-    // Process images - upload base64 images to Cloudinary
     const imageUrls = [];
     if (Array.isArray(images) && images.length > 0) {
       console.log(`   Uploading ${images.length} image(s)`);
       for (let i = 0; i < images.length; i++) {
         const timestamp = Date.now();
         const filename = `post_${req.userId}_${timestamp}_${i}`;
-        // Remove data URI prefix if present
         const base64Data = images[i].replace(/^data:image\/\w+;base64,/, '');
         const imageUrl = await uploadBase64Image(base64Data, filename);
         if (imageUrl) {
@@ -52,7 +48,6 @@ exports.createPost = async (req, res) => {
     });
     await post.save();
     
-    // Populate user data including profilePicture and coverPhoto
     await post.populate('userId', 'name username avatar profilePicture coverPhoto email');
     
     console.log(`✅ Post created: ${post._id} (type: ${post.type}, skills: ${skillArray.join(', ')})`);
@@ -65,31 +60,39 @@ exports.createPost = async (req, res) => {
 
 exports.listPosts = async (req, res) => {
   try {
-    const userId = req.userId; // Current user ID (can be null for unauthenticated)
+    const userId = req.userId;
     
-    // Get pagination parameters from query
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 2; // Default to 2 posts per page (reduced for rate limiting on free tier)
+    const limit = parseInt(req.query.limit) || 2;
     const skip = (page - 1) * limit;
     
     debugLog(`📄 Fetching posts: page=${page}, limit=${limit}, skip=${skip}`);
     
     const posts = await Post.find()
       .populate('userId', 'name username avatar profilePicture coverPhoto email')
-      .populate('sharedFrom', 'userId type content images skills location likes comments shares createdAt')
-      .populate('sharedFrom.userId', 'name username avatar profilePicture coverPhoto email')
+      // ── FIX: nested populate so sharedFrom.userId is fully resolved ──────
+      // Chaining .populate('sharedFrom.userId', ...) as a separate call does
+      // NOT work in Mongoose — it silently no-ops. The correct approach is to
+      // pass a `populate` option *inside* the sharedFrom populate descriptor.
+      .populate({
+        path: 'sharedFrom',
+        select: 'userId type content images skills location likes comments shares createdAt sharedCaption',
+        populate: {
+          path: 'userId',
+          select: 'name username avatar profilePicture coverPhoto',
+        },
+      })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
     
     debugLog(`✅ Found ${posts.length} posts for page ${page}`);
     
-    // Add 'liked' field to each post indicating if current user has liked it
     const postsWithLiked = posts.map(post => {
       const postObj = post.toObject();
       postObj.liked = userId ? post.likes.includes(userId) : false;
-      postObj.likes = post.likes.length; // Convert likes array to count
-      postObj.comments = post.comments.length; // Convert comments array to count
+      postObj.likes = post.likes.length;
+      postObj.comments = post.comments.length;
       return postObj;
     });
     
@@ -116,7 +119,6 @@ exports.likePost = async (req, res) => {
       return res.status(404).json({ msg: 'Post not found' });
     }
 
-    // Check if user already liked
     if (post.likes.includes(userId)) {
       return res.status(400).json({ msg: 'Already liked' });
     }
@@ -124,7 +126,6 @@ exports.likePost = async (req, res) => {
     post.likes.push(userId);
     await post.save();
 
-    // Broadcast like event to all connected clients
     if (io) {
       io.emit('post:liked', {
         postId: post._id,
@@ -156,7 +157,6 @@ exports.unlikePost = async (req, res) => {
       return res.status(404).json({ msg: 'Post not found' });
     }
 
-    // Check if user liked
     const likeIndex = post.likes.indexOf(userId);
     if (likeIndex === -1) {
       return res.status(400).json({ msg: 'Not liked' });
@@ -165,7 +165,6 @@ exports.unlikePost = async (req, res) => {
     post.likes.splice(likeIndex, 1);
     await post.save();
 
-    // Broadcast unlike event to all connected clients
     if (io) {
       io.emit('post:unliked', {
         postId: post._id,
@@ -202,7 +201,6 @@ exports.commentOnPost = async (req, res) => {
       return res.status(404).json({ msg: 'Post not found' });
     }
 
-    // Validate parentId if provided (for replies)
     if (parentId) {
       const parentComment = post.comments.id(parentId);
       if (!parentComment) {
@@ -221,7 +219,6 @@ exports.commentOnPost = async (req, res) => {
     await post.save();
     await post.populate('comments.user', 'name username avatar profilePicture');
 
-    // Broadcast comment event to all connected clients
     if (io) {
       io.emit('post:commented', {
         postId: post._id,
@@ -254,14 +251,20 @@ exports.getPost = async (req, res) => {
       .populate('userId', 'name username avatar profilePicture coverPhoto email')
       .populate('likes', 'name username avatar')
       .populate('comments.user', 'name username avatar profilePicture')
-      .populate('sharedFrom', 'userId type content images skills location likes comments shares createdAt')
-      .populate('sharedFrom.userId', 'name username avatar profilePicture coverPhoto email');
+      // ── FIX: same nested populate fix as listPosts ────────────────────────
+      .populate({
+        path: 'sharedFrom',
+        select: 'userId type content images skills location likes comments shares createdAt sharedCaption',
+        populate: {
+          path: 'userId',
+          select: 'name username avatar profilePicture coverPhoto',
+        },
+      });
 
     if (!post) {
       return res.status(404).json({ msg: 'Post not found' });
     }
 
-    // Add liked flag for current user
     const postObj = post.toObject();
     postObj.liked = userId ? post.likes.includes(userId) : false;
 
@@ -292,7 +295,6 @@ exports.getComments = async (req, res) => {
       return res.status(404).json({ msg: 'Post not found' });
     }
 
-    // Reverse comments so newest appear first, then paginate
     const reversedComments = [...post.comments].reverse();
     const startIndex = (parseInt(page) - 1) * parseInt(limit);
     const endIndex = startIndex + parseInt(limit);
@@ -311,7 +313,7 @@ exports.getComments = async (req, res) => {
   }
 };
 
-// Share post (increment share counter - optional, just for tracking)
+// Share post
 exports.sharePost = async (req, res) => {
   try {
     const { id: postId } = req.params;
@@ -323,52 +325,50 @@ exports.sharePost = async (req, res) => {
       return res.status(400).json({ msg: 'Post ID required' });
     }
 
-    // Check if original post exists
     const originalPost = await Post.findById(postId)
       .populate('userId', 'name username avatar profilePicture coverPhoto email');
     if (!originalPost) {
       return res.status(404).json({ msg: 'Post not found' });
     }
 
-    // Increment share count on original post
-    await Post.findByIdAndUpdate(
-      postId,
-      { $inc: { shares: 1 } },
-      { new: true }
-    );
+    await Post.findByIdAndUpdate(postId, { $inc: { shares: 1 } }, { new: true });
 
-    // Create a new "shared" post in the user's timeline
-    // Include the original post's content, images, and skills
+    const trimmedCaption = caption && caption.trim() ? caption.trim() : null;
+
     const sharedPost = new Post({
       userId: userId,
-      type: 'share', // Mark this as a share type
-      content: caption || originalPost.content, // Use caption if provided, otherwise original content
+      type: 'share',
+      content: trimmedCaption || '',   // keep content in sync (some clients read it)
       sharedFrom: postId,
-      sharedCaption: caption || null,
-      images: originalPost.images || [], // Include original post images
-      skills: originalPost.skills || [], // Include original post skills
-      location: originalPost.location || null
+      sharedCaption: trimmedCaption,   // the dedicated caption field
+      images: [],   // don't copy images — they live on the original post via sharedFrom
+      skills: [],   // don't copy skills — same reason
+      location: null
     });
 
     await sharedPost.save();
 
-    // Populate the shared post with user data
+    // Populate with nested userId so the response mirrors what listPosts returns
     await sharedPost.populate('userId', 'name username avatar profilePicture');
-    await sharedPost.populate('sharedFrom');
+    await sharedPost.populate({
+      path: 'sharedFrom',
+      select: 'userId type content images skills location likes comments shares createdAt sharedCaption',
+      populate: {
+        path: 'userId',
+        select: 'name username avatar profilePicture coverPhoto',
+      },
+    });
 
     console.log(`📤 Post ${postId} shared by ${userId}`);
-    console.log(`   New share post created: ${sharedPost._id}`);
-    console.log(`   Shared content: ${sharedPost.content?.substring(0, 50)}...`);
-    console.log(`   Shared images: ${sharedPost.images.length}`);
-    console.log(`   Shared skills: ${sharedPost.skills.join(', ')}`);
+    console.log(`   New share post: ${sharedPost._id}`);
+    console.log(`   Caption: "${trimmedCaption || '(none)'}"`);
 
-    // Broadcast share event to all connected clients
     if (io) {
       io.emit('post:shared', {
         originalPostId: postId,
         sharedPostId: sharedPost._id,
         userId: userId,
-        caption: caption || null,
+        caption: trimmedCaption || null,
         timestamp: new Date()
       });
     }
@@ -383,8 +383,6 @@ exports.sharePost = async (req, res) => {
     res.status(500).json({ msg: 'Server error', error: err.message });
   }
 };
-
-
 
 // Edit a comment
 exports.editComment = async (req, res) => {
@@ -411,23 +409,19 @@ exports.editComment = async (req, res) => {
       return res.status(404).json({ msg: 'Post not found' });
     }
 
-    // Find the comment
     const comment = post.comments.id(commentId);
     if (!comment) {
       return res.status(404).json({ msg: 'Comment not found' });
     }
 
-    // Verify user owns the comment
     if (comment.user.toString() !== userId) {
       return res.status(403).json({ msg: 'Not authorized to edit this comment' });
     }
 
-    // Update comment text
     comment.text = text.trim();
     await post.save();
     await post.populate('comments.user', 'name username avatar');
 
-    // Broadcast edit event
     if (io) {
       io.emit('comment:edited', {
         postId: post._id,
@@ -460,22 +454,18 @@ exports.deleteComment = async (req, res) => {
       return res.status(404).json({ msg: 'Post not found' });
     }
 
-    // Find the comment
     const comment = post.comments.id(commentId);
     if (!comment) {
       return res.status(404).json({ msg: 'Comment not found' });
     }
 
-    // Verify user owns the comment
     if (comment.user.toString() !== userId) {
       return res.status(403).json({ msg: 'Not authorized to delete this comment' });
     }
 
-    // Delete comment
     post.comments.id(commentId).deleteOne();
     await post.save();
 
-    // Broadcast delete event
     if (io) {
       io.emit('comment:deleted', {
         postId: post._id,
