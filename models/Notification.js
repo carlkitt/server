@@ -11,7 +11,7 @@ const NotificationSchema = new mongoose.Schema({
   message: { type: String, required: true },
   postId: { type: mongoose.Schema.Types.ObjectId, ref: 'Post', default: null },
   postSnippet: { type: String, default: null },
-  relatedData: { type: mongoose.Schema.Mixed, default: null }, // For storing extra context
+  relatedData: mongoose.Schema.Types.Mixed, // For storing extra context
   isRead: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
