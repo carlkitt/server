@@ -71,7 +71,7 @@ module.exports = (io) => {
       console.log(`📤 Sending answer to caller: ${call.callerId}`);
 
       // Send answer with the actual answer data, not just a string
-      io.to(`user:${call.callerId}`).emit('call:answered', { callId, answer });
+      io.to(call.callerId).emit('call:answered', { callId, answer });
     });
 
     // ── Reject call ────────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ module.exports = (io) => {
       console.log(`❌ Call ${callId} rejected`);
       activeCalls.delete(callId);
 
-      io.to(`user:${call.callerId}`).emit('call:rejected', { callId, reason: reason || 'declined' });
+      io.to(call.callerId).emit('call:rejected', { callId, reason: reason || 'declined' });
     });
 
     // ── End call ───────────────────────────────────────────────────────────────
@@ -104,11 +104,10 @@ module.exports = (io) => {
     socket.on('call:ice-candidate', (data) => {
       const { callId, candidate, targetUserId } = data;
       console.log(`🧊 Forwarding ICE candidate for call ${callId} to ${targetUserId}`);
-      io.to(`user:${targetUserId}`).emit('call:ice-candidate', {
+      io.to(targetUserId).emit('call:ice-candidate', {
         callId,
         candidate,
         fromUserId: userId
-      });
       });
     });
 
@@ -136,4 +135,5 @@ module.exports = (io) => {
         }
       }
     });
-  };
+  });
+};
