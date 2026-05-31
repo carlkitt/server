@@ -324,7 +324,8 @@ exports.sharePost = async (req, res) => {
     }
 
     // Check if original post exists
-    const originalPost = await Post.findById(postId);
+    const originalPost = await Post.findById(postId)
+      .populate('userId', 'name username avatar profilePicture coverPhoto email');
     if (!originalPost) {
       return res.status(404).json({ msg: 'Post not found' });
     }
@@ -337,15 +338,16 @@ exports.sharePost = async (req, res) => {
     );
 
     // Create a new "shared" post in the user's timeline
+    // Include the original post's content, images, and skills
     const sharedPost = new Post({
       userId: userId,
       type: 'share', // Mark this as a share type
-      content: caption || null,
+      content: caption || originalPost.content, // Use caption if provided, otherwise original content
       sharedFrom: postId,
       sharedCaption: caption || null,
-      images: [],
-      skills: [],
-      location: null
+      images: originalPost.images || [], // Include original post images
+      skills: originalPost.skills || [], // Include original post skills
+      location: originalPost.location || null
     });
 
     await sharedPost.save();
@@ -356,6 +358,9 @@ exports.sharePost = async (req, res) => {
 
     console.log(`📤 Post ${postId} shared by ${userId}`);
     console.log(`   New share post created: ${sharedPost._id}`);
+    console.log(`   Shared content: ${sharedPost.content?.substring(0, 50)}...`);
+    console.log(`   Shared images: ${sharedPost.images.length}`);
+    console.log(`   Shared skills: ${sharedPost.skills.join(', ')}`);
 
     // Broadcast share event to all connected clients
     if (io) {
