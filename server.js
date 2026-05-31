@@ -15,6 +15,7 @@ const userRoutes = require('./routes/userRoutes');
 const postRoutes = require('./routes/postRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const skillRoutes = require('./routes/skillRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -97,6 +98,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/skills', skillRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Basic root
 app.get('/', (req, res) => res.send({ ok: true, message: 'SkillLink API' }));

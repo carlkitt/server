@@ -1,5 +1,6 @@
 const Post = require('../models/Post');
 const { uploadBase64Image } = require('../config/cloudinary');
+const notificationController = require('./notificationController');
 
 // Helper function for debug logging
 const debugLog = (message) => console.log(message);
@@ -126,6 +127,9 @@ exports.likePost = async (req, res) => {
     post.likes.push(userId);
     await post.save();
 
+    // Create notification
+    await notificationController.notifyLike(postId, post.userId, userId);
+
     if (io) {
       io.emit('post:liked', {
         postId: post._id,
@@ -218,6 +222,9 @@ exports.commentOnPost = async (req, res) => {
     post.comments.push(newComment);
     await post.save();
     await post.populate('comments.user', 'name username avatar profilePicture');
+
+    // Create notification
+    await notificationController.notifyComment(postId, newComment.text, userId);
 
     if (io) {
       io.emit('post:commented', {

@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { uploadBase64Image } = require('../config/cloudinary');
+const notificationController = require('./notificationController');
 
 exports.getUser = async (req, res) => {
   try {
@@ -232,6 +233,9 @@ exports.followUser = async (req, res) => {
 
     await currentUser.save();
     await targetUser.save();
+
+    // Create notification
+    await notificationController.notifyFollow(targetUserId, currentUserId);
 
     res.json({ message: 'User followed successfully' });
   } catch (err) {
