@@ -20,4 +20,7 @@ router.delete('/:id/comments/:commentId', auth, postController.deleteComment);
 // Share
 router.post('/:id/share', auth, postController.sharePost);
 
+// Delete post
+router.delete('/:id', auth, postController.deletePost);
+
 module.exports = router;

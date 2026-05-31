@@ -481,3 +481,44 @@ exports.deleteComment = async (req, res) => {
     res.status(500).json({ msg: 'Server error' });
   }
 };
+
+// Delete a post
+exports.deletePost = async (req, res) => {
+  try {
+    const { id: postId } = req.params;
+    const userId = req.userId;
+    const io = req.io;
+
+    if (!postId) {
+      return res.status(400).json({ msg: 'Post ID required' });
+    }
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ msg: 'Post not found' });
+    }
+
+    // Check authorization - only post owner can delete
+    if (post.userId.toString() !== userId) {
+      return res.status(403).json({ msg: 'Not authorized to delete this post' });
+    }
+
+    // Delete the post
+    await Post.findByIdAndDelete(postId);
+
+    console.log(`🗑️ Post ${postId} deleted by user ${userId}`);
+
+    if (io) {
+      io.emit('post:deleted', {
+        postId: postId,
+        userId: userId,
+        timestamp: new Date()
+      });
+    }
+
+    res.json({ msg: 'Post deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
