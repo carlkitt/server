@@ -76,6 +76,8 @@ exports.listPosts = async (req, res) => {
     
     const posts = await Post.find()
       .populate('userId', 'name username avatar profilePicture coverPhoto email')
+      .populate('sharedFrom', 'userId type content images skills location likes comments shares createdAt')
+      .populate('sharedFrom.userId', 'name username avatar profilePicture coverPhoto email')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -251,7 +253,9 @@ exports.getPost = async (req, res) => {
     const post = await Post.findById(postId)
       .populate('userId', 'name username avatar profilePicture coverPhoto email')
       .populate('likes', 'name username avatar')
-      .populate('comments.user', 'name username avatar profilePicture');
+      .populate('comments.user', 'name username avatar profilePicture')
+      .populate('sharedFrom', 'userId type content images skills location likes comments shares createdAt')
+      .populate('sharedFrom.userId', 'name username avatar profilePicture coverPhoto email');
 
     if (!post) {
       return res.status(404).json({ msg: 'Post not found' });
@@ -319,32 +323,63 @@ exports.sharePost = async (req, res) => {
       return res.status(400).json({ msg: 'Post ID required' });
     }
 
-    const post = await Post.findByIdAndUpdate(
+    // Check if original post exists
+    const originalPost = await Post.findById(postId);
+    if (!originalPost) {
+      return res.status(404).json({ msg: 'Post not found' });
+    }
+
+    // Increment share count on original post
+    await Post.findByIdAndUpdate(
       postId,
       { $inc: { shares: 1 } },
       { new: true }
     );
 
-    if (!post) {
-      return res.status(404).json({ msg: 'Post not found' });
-    }
+    // Create a new "shared" post in the user's timeline
+    const sharedPost = new Post({
+      userId: userId,
+      type: 'share', // Mark this as a share type
+      content: caption || null,
+      sharedFrom: postId,
+      sharedCaption: caption || null,
+      images: [],
+      skills: [],
+      location: null
+    });
+
+    await sharedPost.save();
+
+    // Populate the shared post with user data
+    await sharedPost.populate('userId', 'name username avatar profilePicture');
+    await sharedPost.populate('sharedFrom');
+
+    console.log(`📤 Post ${postId} shared by ${userId}`);
+    console.log(`   New share post created: ${sharedPost._id}`);
 
     // Broadcast share event to all connected clients
     if (io) {
       io.emit('post:shared', {
-        postId: post._id,
-        shares: post.shares || 0,
+        originalPostId: postId,
+        sharedPostId: sharedPost._id,
         userId: userId,
-        caption: caption || null
+        caption: caption || null,
+        timestamp: new Date()
       });
     }
 
-    res.json({ msg: 'Post shared', shares: post.shares || 0, caption });
+    res.json({ 
+      msg: 'Post shared successfully',
+      sharedPost: sharedPost,
+      originalShares: originalPost.shares + 1
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    console.error('❌ Share post error:', err);
+    res.status(500).json({ msg: 'Server error', error: err.message });
   }
 };
+
+
 
 // Edit a comment
 exports.editComment = async (req, res) => {
