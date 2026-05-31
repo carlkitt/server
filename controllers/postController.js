@@ -8,9 +8,26 @@ exports.createPost = async (req, res) => {
   try {
     const { type, content, images, location, skills } = req.body;
     
+    // Validate required fields
+    if (!content || !content.trim()) {
+      return res.status(400).json({ msg: 'Content is required' });
+    }
+    
+    if (!Array.isArray(skills) || skills.length === 0) {
+      return res.status(400).json({ msg: 'At least one skill tag is required' });
+    }
+    
+    // Validate location-dependent posts
+    if ((type === 'shop' || type === 'wanted') && !location) {
+      return res.status(400).json({ msg: 'Location is required for this post type' });
+    }
+    
+    console.log(`📝 Creating ${type} post for user: ${req.userId}`);
+    
     // Process images - upload base64 images to Cloudinary
     const imageUrls = [];
     if (Array.isArray(images) && images.length > 0) {
+      console.log(`   Uploading ${images.length} image(s)`);
       for (let i = 0; i < images.length; i++) {
         const timestamp = Date.now();
         const filename = `post_${req.userId}_${timestamp}_${i}`;
@@ -19,6 +36,7 @@ exports.createPost = async (req, res) => {
         const imageUrl = await uploadBase64Image(base64Data, filename);
         if (imageUrl) {
           imageUrls.push(imageUrl);
+          console.log(`   ✅ Image ${i + 1} uploaded: ${imageUrl.substring(0, 50)}...`);
         }
       }
     }
@@ -26,7 +44,7 @@ exports.createPost = async (req, res) => {
     const skillArray = Array.isArray(skills) ? skills : [];
     const post = new Post({ 
       userId: req.userId, 
-      type, 
+      type: type || 'skill', 
       content, 
       images: imageUrls,
       skills: skillArray,
@@ -37,9 +55,10 @@ exports.createPost = async (req, res) => {
     // Populate user data including profilePicture and coverPhoto
     await post.populate('userId', 'name username avatar profilePicture coverPhoto email');
     
+    console.log(`✅ Post created: ${post._id} (type: ${post.type}, skills: ${skillArray.join(', ')})`);
     res.status(201).json(post);
   } catch (err) {
-    console.error(err);
+    console.error('❌ Create post error:', err);
     res.status(500).json({ msg: 'Server error', error: err.message });
   }
 };
