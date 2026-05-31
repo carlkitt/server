@@ -43,8 +43,6 @@ module.exports = (io) => {
         startedAt: new Date()
       });
 
-      // Send call notification through notification channel (not call:incoming socket event)
-      // This way it will trigger a system notification on the receiver's phone
       console.log(`📤 Sending call notification to: ${calleeId}`);
       io.to(`user:${calleeId}`).emit('call:notification', {
         type: 'incoming_call',
@@ -70,8 +68,8 @@ module.exports = (io) => {
       console.log(`✅ Call ${callId} answered`);
       console.log(`📤 Sending answer to caller: ${call.callerId}`);
 
-      // Send answer with the actual answer data, not just a string
-      io.to(call.callerId).emit('call:answered', { callId, answer });
+      // FIX: use room `user:<id>` so it reaches the caller regardless of reconnects
+      io.to(`user:${call.callerId}`).emit('call:answered', { callId, answer });
     });
 
     // ── Reject call ────────────────────────────────────────────────────────────
@@ -83,7 +81,8 @@ module.exports = (io) => {
       console.log(`❌ Call ${callId} rejected`);
       activeCalls.delete(callId);
 
-      io.to(call.callerId).emit('call:rejected', { callId, reason: reason || 'declined' });
+      // FIX: use room
+      io.to(`user:${call.callerId}`).emit('call:rejected', { callId, reason: reason || 'declined' });
     });
 
     // ── End call ───────────────────────────────────────────────────────────────
@@ -95,7 +94,8 @@ module.exports = (io) => {
       console.log(`📴 Call ${callId} ended`);
       activeCalls.delete(callId);
 
-      // Notify both parties through their user rooms
+      // FIX: was io.to(call.callerId) and io.to(call.calleeId) — raw user IDs,
+      // not room names. The callee never received call:ended. Use user rooms.
       io.to(`user:${call.callerId}`).emit('call:ended', { callId });
       io.to(`user:${call.calleeId}`).emit('call:ended', { callId });
     });
@@ -104,7 +104,8 @@ module.exports = (io) => {
     socket.on('call:ice-candidate', (data) => {
       const { callId, candidate, targetUserId } = data;
       console.log(`🧊 Forwarding ICE candidate for call ${callId} to ${targetUserId}`);
-      io.to(targetUserId).emit('call:ice-candidate', {
+      // FIX: was io.to(targetUserId) — must use the user room
+      io.to(`user:${targetUserId}`).emit('call:ice-candidate', {
         callId,
         candidate,
         fromUserId: userId
