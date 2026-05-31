@@ -46,7 +46,7 @@ module.exports = (io) => {
       // Send call notification through notification channel (not call:incoming socket event)
       // This way it will trigger a system notification on the receiver's phone
       console.log(`📤 Sending call notification to: ${calleeId}`);
-      io.to(calleeId).emit('call:notification', {
+      io.to(`user:${calleeId}`).emit('call:notification', {
         type: 'incoming_call',
         callId,
         callerId: userId,
