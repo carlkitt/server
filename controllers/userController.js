@@ -154,44 +154,103 @@ exports.updateProfile = async (req, res) => {
 // ── uploadAvatar ───────────────────────────────────────────────────────────
 exports.uploadAvatar = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    if (!req.file) {
+      console.error('❌ uploadAvatar: No file provided');
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
     const userId = req.userId;
-    const base64   = req.file.buffer.toString('base64');
+    console.log(`📸 uploadAvatar: Processing file for user ${userId}`);
+    console.log(`📸 File size: ${req.file.size} bytes, mimetype: ${req.file.mimetype}`);
+
+    const base64 = req.file.buffer.toString('base64');
+    console.log(`📸 Base64 length: ${base64.length}`);
     const filename = `avatar_${userId}_${Date.now()}`;
-    const result   = await uploadBase64Image(base64, filename);
-    if (!result?.secure_url) return res.status(500).json({ message: 'Cloudinary upload failed' });
 
+    // Upload to Cloudinary
+    let result;
+    try {
+      result = await uploadBase64Image(base64, filename, req.file.mimetype);
+    } catch (uploadErr) {
+      console.error('❌ uploadAvatar: Cloudinary upload failed:', uploadErr);
+      return res.status(500).json({ 
+        message: `Cloudinary upload failed: ${uploadErr.message}`,
+        error: uploadErr.toString()
+      });
+    }
+
+    if (!result?.secure_url) {
+      console.error('❌ uploadAvatar: No secure_url in response', result);
+      return res.status(500).json({ message: 'Cloudinary upload failed: No URL returned' });
+    }
+
+    // Update user profile picture
     const user = await User.findByIdAndUpdate(
-      userId, { profilePicture: result.secure_url }, { new: true }
+      userId,
+      { profilePicture: result.secure_url },
+      { new: true }
     ).select('-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
 
+    if (!user) {
+      console.error(`❌ uploadAvatar: User ${userId} not found`);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    console.log(`✅ uploadAvatar: Avatar updated for user ${userId}`);
     res.json(user);
   } catch (err) {
-    console.error('uploadAvatar error:', err);
-    res.status(500).json({ message: 'Failed to upload avatar' });
+    console.error('❌ uploadAvatar error:', err.message, err);
+    res.status(500).json({ message: `Failed to upload avatar: ${err.message}` });
   }
 };
 
 // ── uploadCoverPhoto ───────────────────────────────────────────────────────
 exports.uploadCoverPhoto = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    if (!req.file) {
+      console.error('❌ uploadCoverPhoto: No file provided');
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
     const userId = req.userId;
-    const base64   = req.file.buffer.toString('base64');
+    console.log(`📸 uploadCoverPhoto: Processing file for user ${userId}`);
+    console.log(`📸 File size: ${req.file.size} bytes, mimetype: ${req.file.mimetype}`);
+
+    const base64 = req.file.buffer.toString('base64');
+    console.log(`📸 Base64 length: ${base64.length}`);
     const filename = `cover_${userId}_${Date.now()}`;
-    const result   = await uploadBase64Image(base64, filename);
-    if (!result?.secure_url) return res.status(500).json({ message: 'Cloudinary upload failed' });
 
+    // Upload to Cloudinary
+    let result;
+    try {
+      result = await uploadBase64Image(base64, filename, req.file.mimetype);
+    } catch (uploadErr) {
+      console.error('❌ uploadCoverPhoto: Cloudinary upload failed:', uploadErr.message);
+      return res.status(500).json({ message: `Cloudinary upload failed: ${uploadErr.message}` });
+    }
+
+    if (!result?.secure_url) {
+      console.error('❌ uploadCoverPhoto: No secure_url in response');
+      return res.status(500).json({ message: 'Cloudinary upload failed: No URL returned' });
+    }
+
+    // Update user cover photo
     const user = await User.findByIdAndUpdate(
-      userId, { coverPhoto: result.secure_url }, { new: true }
+      userId,
+      { coverPhoto: result.secure_url },
+      { new: true }
     ).select('-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
 
+    if (!user) {
+      console.error(`❌ uploadCoverPhoto: User ${userId} not found`);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    console.log(`✅ uploadCoverPhoto: Cover photo updated for user ${userId}`);
     res.json(user);
   } catch (err) {
-    console.error('uploadCoverPhoto error:', err);
-    res.status(500).json({ message: 'Failed to upload cover photo' });
+    console.error('❌ uploadCoverPhoto error:', err.message);
+    res.status(500).json({ message: `Failed to upload cover photo: ${err.message}` });
   }
 };
 
