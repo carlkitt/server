@@ -13,6 +13,32 @@ exports.getUser = async (req, res) => {
   }
 };
 
+// ── getMe ──────────────────────────────────────────────────────────────────
+// Get current authenticated user's profile (used by refreshUser in AuthProvider)
+exports.getMe = async (req, res) => {
+  try {
+    const userId = req.userId; // From auth middleware
+    console.log(`📥 getMe called for user: ${userId}`);
+
+    if (!userId) {
+      console.error('❌ getMe: userId not found in request');
+      return res.status(401).json({ msg: 'Unauthorized - no user ID' });
+    }
+
+    const user = await User.findById(userId).select('-password');
+    if (!user) {
+      console.error(`❌ getMe: User ${userId} not found in database`);
+      return res.status(404).json({ msg: 'User not found' });
+    }
+
+    console.log(`✅ getMe: Successfully fetched user ${userId}`);
+    res.json(user);
+  } catch (err) {
+    console.error('❌ getMe error:', err.message);
+    res.status(500).json({ msg: 'Server error fetching user profile' });
+  }
+};
+
 exports.updateUser = async (req, res) => {
   try {
     const updates = req.body;

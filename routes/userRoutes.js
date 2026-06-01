@@ -9,6 +9,7 @@ const { Readable } = require('stream');
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Specific routes first (before /:id)
+router.get('/me', auth, userController.getMe);
 router.put('/profile', auth, userController.updateProfile);
 router.post('/upload-avatar', auth, upload.single('avatar'), userController.uploadAvatar);
 router.post('/upload-cover', auth, upload.single('coverPhoto'), userController.uploadCoverPhoto);
