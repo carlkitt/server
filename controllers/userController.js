@@ -25,80 +25,99 @@ exports.updateUser = async (req, res) => {
   }
 };
 
+// ── updateProfile ──────────────────────────────────────────────────────────
+// Handles both the original "edit profile" fields AND the new extended
+// personal-info fields from ProfileCompletionScreen.
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, username, bio, phone, location, locationName, skills } = req.body;
     const userId = req.userId; // From auth middleware
 
+    const {
+      // Original fields
+      name, username, bio, phone, location, locationName, skills,
+      // New extended fields
+      website, gender, relationshipStatus, birthday,
+      languages, interests, hometown,
+      educationSchool, educationLevel, educationYear,
+      employer, jobTitle,
+    } = req.body;
+
     console.log('📝 updateProfile request body:', JSON.stringify(req.body, null, 2));
-    console.log(`   locationName received: "${locationName}"`);
-    console.log(`   location received: "${location}"`);
 
-    // Validate input
-    if (!name || !username) {
-      return res.status(400).json({ message: 'Name and username are required' });
+    // name + username are required only when sent (edit-profile flow)
+    if (name !== undefined && !name) {
+      return res.status(400).json({ message: 'Name cannot be empty' });
+    }
+    if (username !== undefined && !username) {
+      return res.status(400).json({ message: 'Username cannot be empty' });
     }
 
-    // Check if username is already taken by another user
-    const existingUser = await User.findOne({ 
-      username: username,
-      _id: { $ne: userId }
-    });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Username already taken' });
-    }
-
-    // Prepare update object
-    const updateData = {
-      name,
-      username,
-      bio: bio || '',
-      phone: phone || '',
-      skills: skills || []
-    };
-
-    // Parse location if provided
-    // Expected format: "lat,lng"
-    if (location) {
-      const coords = location.split(',').map(coord => parseFloat(coord.trim()));
-      const lat = coords[0];
-      const lng = coords[1];
-      
-      console.log(`📍 Parsing location: ${location}`);
-      console.log(`   Coords: lat=${lat}, lng=${lng}`);
-      
-      if (!isNaN(lat) && !isNaN(lng)) {
-        updateData.location = {
-          type: 'Point',
-          coordinates: [lng, lat] // GeoJSON format: [longitude, latitude]
-        };
-        console.log(`✅ Location coordinates saved: ${JSON.stringify(updateData.location)}`);
-      } else {
-        console.log(`❌ Invalid coordinates: lat=${lat}, lng=${lng}`);
+    // Username uniqueness check
+    if (username) {
+      const existing = await User.findOne({ username, _id: { $ne: userId } });
+      if (existing) {
+        return res.status(400).json({ message: 'Username already taken' });
       }
     }
 
-    // Save location name if provided
-    if (locationName && locationName.trim()) {
-      updateData.locationName = locationName.trim();
-      console.log(`✅ Location name saved: ${locationName}`);
+    // Build update object — only include keys that were actually sent
+    const updateData = {};
+
+    // ── Core ──────────────────────────────────────────────────────────────
+    if (name       !== undefined) updateData.name     = name;
+    if (username   !== undefined) updateData.username = username;
+    if (skills     !== undefined) updateData.skills   = skills;
+
+    // ── Personal ─────────────────────────────────────────────────────────
+    if (bio                !== undefined) updateData.bio                = bio || '';
+    if (phone              !== undefined) updateData.phone              = phone || '';
+    if (website            !== undefined) updateData.website            = website || '';
+    if (gender             !== undefined) updateData.gender             = gender || '';
+    if (relationshipStatus !== undefined) updateData.relationshipStatus = relationshipStatus || '';
+    if (languages          !== undefined) updateData.languages          = languages || '';
+    if (interests          !== undefined) updateData.interests          = interests || '';
+    if (birthday           !== undefined && birthday !== '') {
+      updateData.birthday = new Date(birthday);
     }
 
-    console.log('📦 updateData before save:', JSON.stringify(updateData, null, 2));
-
-    // Update user profile
-    const user = await User.findByIdAndUpdate(
-      userId,
-      updateData,
-      { new: true }
-    ).select('-password');
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    // ── Location ──────────────────────────────────────────────────────────
+    if (locationName !== undefined) updateData.locationName = locationName.trim();
+    if (hometown     !== undefined) updateData.hometown     = hometown || '';
+    if (location) {
+      const coords = location.split(',').map(c => parseFloat(c.trim()));
+      const [lat, lng] = coords;
+      if (!isNaN(lat) && !isNaN(lng)) {
+        updateData.location = { type: 'Point', coordinates: [lng, lat] };
+      }
     }
 
-    console.log(`✅ Profile updated for user ${userId}`);
-    console.log('✅ User after update:', JSON.stringify(user, null, 2));
+    // ── Education ─────────────────────────────────────────────────────────
+    if (educationSchool !== undefined) updateData.educationSchool = educationSchool || '';
+    if (educationLevel  !== undefined) updateData.educationLevel  = educationLevel  || '';
+    if (educationYear   !== undefined) updateData.educationYear   = educationYear   || '';
+
+    // ── Work ─────────────────────────────────────────────────────────────
+    if (employer !== undefined) updateData.employer = employer || '';
+    if (jobTitle !== undefined) updateData.jobTitle = jobTitle || '';
+
+    console.log('📦 updateData:', JSON.stringify(updateData, null, 2));
+
+    const user = await User.findByIdAndUpdate(userId, updateData, { new: true }).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    console.log(`✅ Profile updated for user ${userId} — completion: ${user.completionPercent}%`);
+
+    // ── Send profile-completion notification if this is the first time
+    // the user fills in substantial personal info and completion crosses 30%
+    const prevCompletion = req.body._prevCompletion; // optionally sent by client
+    if (user.completionPercent >= 30 && (!prevCompletion || prevCompletion < 30)) {
+      try {
+        await notificationController.notifyProfileCompletion(userId, user.completionPercent);
+      } catch (notifErr) {
+        console.warn('Could not send profile-completion notification:', notifErr.message);
+      }
+    }
+
     res.json(user);
   } catch (err) {
     console.error('updateProfile error:', err);
@@ -106,43 +125,21 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
+// ── uploadAvatar ───────────────────────────────────────────────────────────
 exports.uploadAvatar = async (req, res) => {
   try {
-    // Check if file was uploaded
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
-    }
-
-    const userId = req.userId; // From auth middleware
-    console.log(`📸 uploadAvatar request from user ${userId}`);
-
-    // Convert buffer to base64
-    const base64 = req.file.buffer.toString('base64');
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const userId = req.userId;
+    const base64   = req.file.buffer.toString('base64');
     const filename = `avatar_${userId}_${Date.now()}`;
+    const result   = await uploadBase64Image(base64, filename);
+    if (!result?.secure_url) return res.status(500).json({ message: 'Cloudinary upload failed' });
 
-    // Upload to Cloudinary
-    console.log(`⬆️ Uploading to Cloudinary with filename: ${filename}`);
-    const result = await uploadBase64Image(base64, filename);
-    
-    if (!result || !result.secure_url) {
-      console.error('❌ Cloudinary upload failed:', result);
-      return res.status(500).json({ message: 'Failed to upload image to Cloudinary' });
-    }
-
-    console.log(`✅ Cloudinary upload successful: ${result.secure_url}`);
-
-    // Update user's profile picture in database
     const user = await User.findByIdAndUpdate(
-      userId,
-      { profilePicture: result.secure_url },
-      { new: true }
+      userId, { profilePicture: result.secure_url }, { new: true }
     ).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    console.log(`✅ User profile picture updated in database`);
     res.json(user);
   } catch (err) {
     console.error('uploadAvatar error:', err);
@@ -150,43 +147,21 @@ exports.uploadAvatar = async (req, res) => {
   }
 };
 
+// ── uploadCoverPhoto ───────────────────────────────────────────────────────
 exports.uploadCoverPhoto = async (req, res) => {
   try {
-    // Check if file was uploaded
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
-    }
-
-    const userId = req.userId; // From auth middleware
-    console.log(`🖼️ uploadCoverPhoto request from user ${userId}`);
-
-    // Convert buffer to base64
-    const base64 = req.file.buffer.toString('base64');
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const userId = req.userId;
+    const base64   = req.file.buffer.toString('base64');
     const filename = `cover_${userId}_${Date.now()}`;
+    const result   = await uploadBase64Image(base64, filename);
+    if (!result?.secure_url) return res.status(500).json({ message: 'Cloudinary upload failed' });
 
-    // Upload to Cloudinary
-    console.log(`⬆️ Uploading to Cloudinary with filename: ${filename}`);
-    const result = await uploadBase64Image(base64, filename);
-    
-    if (!result || !result.secure_url) {
-      console.error('❌ Cloudinary upload failed:', result);
-      return res.status(500).json({ message: 'Failed to upload image to Cloudinary' });
-    }
-
-    console.log(`✅ Cloudinary upload successful: ${result.secure_url}`);
-
-    // Update user's cover photo in database
     const user = await User.findByIdAndUpdate(
-      userId,
-      { coverPhoto: result.secure_url },
-      { new: true }
+      userId, { coverPhoto: result.secure_url }, { new: true }
     ).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    console.log(`✅ User cover photo updated in database`);
     res.json(user);
   } catch (err) {
     console.error('uploadCoverPhoto error:', err);
@@ -194,47 +169,34 @@ exports.uploadCoverPhoto = async (req, res) => {
   }
 };
 
+// ── followUser ─────────────────────────────────────────────────────────────
 exports.followUser = async (req, res) => {
   try {
-    const currentUserId = req.userId; // User making the request
-    const { id: targetUserId } = req.params; // User to follow
+    const currentUserId  = req.userId;
+    const { id: targetUserId } = req.params;
 
-    if (currentUserId === targetUserId) {
+    if (currentUserId === targetUserId)
       return res.status(400).json({ message: 'Cannot follow yourself' });
-    }
 
-    const currentUser = await User.findById(currentUserId);
-    const targetUser = await User.findById(targetUserId);
+    const [currentUser, targetUser] = await Promise.all([
+      User.findById(currentUserId),
+      User.findById(targetUserId),
+    ]);
+    if (!currentUser) return res.status(404).json({ message: 'Current user not found' });
+    if (!targetUser)  return res.status(404).json({ message: 'User not found' });
 
-    if (!currentUser) {
-      return res.status(404).json({ message: 'Current user not found' });
-    }
+    currentUser.following = currentUser.following || [];
+    targetUser.followers  = targetUser.followers  || [];
 
-    if (!targetUser) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Initialize arrays if they don't exist
-    if (!currentUser.following) currentUser.following = [];
-    if (!targetUser.followers) targetUser.followers = [];
-
-    // Check if already following
-    if (currentUser.following.some(id => id.toString() === targetUserId)) {
+    if (currentUser.following.some(id => id.toString() === targetUserId))
       return res.status(400).json({ message: 'Already following this user' });
-    }
 
-    // Add to following list
     currentUser.following.push(targetUserId);
     currentUser.followingCount = currentUser.following.length;
-
-    // Add to followers list
     targetUser.followers.push(currentUserId);
     targetUser.followersCount = targetUser.followers.length;
 
-    await currentUser.save();
-    await targetUser.save();
-
-    // Create notification
+    await Promise.all([currentUser.save(), targetUser.save()]);
     await notificationController.notifyFollow(targetUserId, currentUserId);
 
     res.json({ message: 'User followed successfully' });
@@ -244,37 +206,25 @@ exports.followUser = async (req, res) => {
   }
 };
 
+// ── unfollowUser ───────────────────────────────────────────────────────────
 exports.unfollowUser = async (req, res) => {
   try {
-    const currentUserId = req.userId;
+    const currentUserId        = req.userId;
     const { id: targetUserId } = req.params;
 
-    const currentUser = await User.findById(currentUserId);
-    const targetUser = await User.findById(targetUserId);
+    const [currentUser, targetUser] = await Promise.all([
+      User.findById(currentUserId),
+      User.findById(targetUserId),
+    ]);
+    if (!currentUser) return res.status(404).json({ message: 'Current user not found' });
+    if (!targetUser)  return res.status(404).json({ message: 'User not found' });
 
-    if (!currentUser) {
-      return res.status(404).json({ message: 'Current user not found' });
-    }
-
-    if (!targetUser) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Initialize arrays if they don't exist
-    if (!currentUser.following) currentUser.following = [];
-    if (!targetUser.followers) targetUser.followers = [];
-
-    // Remove from following list
-    currentUser.following = currentUser.following.filter(id => id.toString() !== targetUserId);
+    currentUser.following = (currentUser.following || []).filter(id => id.toString() !== targetUserId);
     currentUser.followingCount = currentUser.following.length;
+    targetUser.followers  = (targetUser.followers  || []).filter(id => id.toString() !== currentUserId);
+    targetUser.followersCount  = targetUser.followers.length;
 
-    // Remove from followers list
-    targetUser.followers = targetUser.followers.filter(id => id.toString() !== currentUserId);
-    targetUser.followersCount = targetUser.followers.length;
-
-    await currentUser.save();
-    await targetUser.save();
-
+    await Promise.all([currentUser.save(), targetUser.save()]);
     res.json({ message: 'User unfollowed successfully' });
   } catch (err) {
     console.error('unfollowUser error:', err);
@@ -282,24 +232,19 @@ exports.unfollowUser = async (req, res) => {
   }
 };
 
+// ── isFollowing ────────────────────────────────────────────────────────────
 exports.isFollowing = async (req, res) => {
   try {
-    const currentUserId = req.userId;
+    const currentUserId        = req.userId;
     const { id: targetUserId } = req.params;
 
     const currentUser = await User.findById(currentUserId);
-    if (!currentUser) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    if (!currentUser) return res.status(404).json({ message: 'User not found' });
 
-    const isFollowing = currentUser.following && currentUser.following.length > 0
-      ? currentUser.following.some(id => id.toString() === targetUserId)
-      : false;
-
+    const isFollowing = (currentUser.following || []).some(id => id.toString() === targetUserId);
     res.json({ isFollowing });
   } catch (err) {
     console.error('isFollowing error:', err);
     res.status(500).json({ message: 'Failed to check follow status' });
   }
 };
-

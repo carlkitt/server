@@ -310,3 +310,60 @@ exports.notifySystem = async (recipientId, message) => {
     console.error('Error creating system notification:', error);
   }
 };
+
+exports.notifyProfileCompletion = async (userId, completionPercent) => {
+  try {
+    // Don't spam — skip if one was already sent in the last 7 days
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const recent = await Notification.findOne({
+      recipientId: userId,
+      type: 'system',
+      'relatedData.kind': 'profile_completion',
+      createdAt: { $gte: sevenDaysAgo },
+    });
+    if (recent) return;
+ 
+    let message;
+    if (completionPercent < 50) {
+      message = `Your profile is only ${completionPercent}% complete. Add more details to stand out to employers!`;
+    } else if (completionPercent < 80) {
+      message = `Your profile is ${completionPercent}% complete. A few more details will help you get hired faster.`;
+    } else {
+      message = `Your profile is looking strong at ${completionPercent}%. Keep it up to date!`;
+    }
+ 
+    await exports.createNotification(
+      userId,
+      userId,                  // sender = self (system-style, same pattern as your notifySystem)
+      'system',
+      message,
+      null,                    // postId
+      null,                    // postSnippet
+      { kind: 'profile_completion', completionPercent }  // relatedData
+    );
+ 
+    console.log(`🔔 Profile-completion notification sent to user ${userId} (${completionPercent}%)`);
+  } catch (error) {
+    console.error('Error creating profile completion notification:', error);
+    // Don't rethrow — non-critical
+  }
+};
+ 
+// ── Internal helper: Welcome notification for new users (call after register)
+exports.notifyNewUserProfilePrompt = async (userId) => {
+  try {
+    await exports.createNotification(
+      userId,
+      userId,
+      'system',
+      'Welcome to SkillLink! 🎉 Complete your profile so clients and employers can find you.',
+      null,
+      null,
+      { kind: 'profile_completion', completionPercent: 0 }
+    );
+ 
+    console.log(`🔔 Welcome notification sent to new user ${userId}`);
+  } catch (error) {
+    console.error('Error creating welcome notification:', error);
+  }
+};

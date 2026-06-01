@@ -15,7 +15,8 @@ exports.register = async (req, res) => {
 
     user = new User({ name, username, email, password: hashed, phone });
     await user.save();
-
+    await notificationController.notifyNewUserProfilePrompt(user._id);
+    
     const payload = { userId: user._id };
     const token = jwt.sign(payload, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
 
