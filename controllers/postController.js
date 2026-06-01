@@ -30,10 +30,14 @@ exports.createPost = async (req, res) => {
         const timestamp = Date.now();
         const filename = `post_${req.userId}_${timestamp}_${i}`;
         const base64Data = images[i].replace(/^data:image\/\w+;base64,/, '');
-        const imageUrl = await uploadBase64Image(base64Data, filename);
-        if (imageUrl) {
+        const uploadResult = await uploadBase64Image(base64Data, filename);
+        // Extract secure_url from the result object
+        const imageUrl = uploadResult?.secure_url || uploadResult;
+        if (imageUrl && typeof imageUrl === 'string') {
           imageUrls.push(imageUrl);
           console.log(`   ✅ Image ${i + 1} uploaded: ${imageUrl.substring(0, 50)}...`);
+        } else {
+          console.warn(`   ⚠️  Image ${i + 1} upload returned invalid URL:`, uploadResult);
         }
       }
     }
