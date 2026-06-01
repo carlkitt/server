@@ -161,16 +161,36 @@ exports.uploadAvatar = async (req, res) => {
 
     const userId = req.userId;
     console.log(`📸 uploadAvatar: Processing file for user ${userId}`);
-    console.log(`📸 File size: ${req.file.size} bytes, mimetype: ${req.file.mimetype}`);
+    console.log(`📸 File size: ${req.file.size} bytes`);
+    console.log(`📸 Raw mimetype from multer: "${req.file.mimetype}" (type: ${typeof req.file.mimetype})`);
+    console.log(`📸 File originalname: ${req.file.originalname}`);
+    console.log(`📸 File encoding: ${req.file.encoding}`);
 
     const base64 = req.file.buffer.toString('base64');
     console.log(`📸 Base64 length: ${base64.length}`);
     const filename = `avatar_${userId}_${Date.now()}`;
 
+    // Determine MIME type - use multer's if available, otherwise infer from extension
+    let mimeType = req.file.mimetype;
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      console.log(`⚠️  Multer didn't provide proper MIME type, inferring from filename...`);
+      const ext = req.file.originalname.toLowerCase().split('.').pop();
+      const mimeMap = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'bmp': 'image/bmp'
+      };
+      mimeType = mimeMap[ext] || 'image/jpeg';
+      console.log(`📸 Inferred MIME type from .${ext}: ${mimeType}`);
+    }
+
     // Upload to Cloudinary
     let result;
     try {
-      result = await uploadBase64Image(base64, filename, req.file.mimetype);
+      result = await uploadBase64Image(base64, filename, mimeType);
     } catch (uploadErr) {
       console.error('❌ uploadAvatar: Cloudinary upload failed:', uploadErr);
       return res.status(500).json({ 
@@ -214,16 +234,36 @@ exports.uploadCoverPhoto = async (req, res) => {
 
     const userId = req.userId;
     console.log(`📸 uploadCoverPhoto: Processing file for user ${userId}`);
-    console.log(`📸 File size: ${req.file.size} bytes, mimetype: ${req.file.mimetype}`);
+    console.log(`📸 File size: ${req.file.size} bytes`);
+    console.log(`📸 Raw mimetype from multer: "${req.file.mimetype}" (type: ${typeof req.file.mimetype})`);
+    console.log(`📸 File originalname: ${req.file.originalname}`);
+    console.log(`📸 File encoding: ${req.file.encoding}`);
 
     const base64 = req.file.buffer.toString('base64');
     console.log(`📸 Base64 length: ${base64.length}`);
     const filename = `cover_${userId}_${Date.now()}`;
 
+    // Determine MIME type - use multer's if available, otherwise infer from extension
+    let mimeType = req.file.mimetype;
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      console.log(`⚠️  Multer didn't provide proper MIME type, inferring from filename...`);
+      const ext = req.file.originalname.toLowerCase().split('.').pop();
+      const mimeMap = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'bmp': 'image/bmp'
+      };
+      mimeType = mimeMap[ext] || 'image/jpeg';
+      console.log(`📸 Inferred MIME type from .${ext}: ${mimeType}`);
+    }
+
     // Upload to Cloudinary
     let result;
     try {
-      result = await uploadBase64Image(base64, filename, req.file.mimetype);
+      result = await uploadBase64Image(base64, filename, mimeType);
     } catch (uploadErr) {
       console.error('❌ uploadCoverPhoto: Cloudinary upload failed:', uploadErr.message);
       return res.status(500).json({ message: `Cloudinary upload failed: ${uploadErr.message}` });
