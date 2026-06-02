@@ -272,11 +272,23 @@ exports.hireUser = async (req, res) => {
       await conversation.save();
     }
 
+    // Get sender details for requestMeta
+    const sender = await User.findById(senderId).select('firstName lastName profilePicture');
+    const senderName = sender ? `${sender.firstName} ${sender.lastName}` : 'User';
+    
+    // Create message with requestMeta for hire request card
     const message = new Message({
       conversationId: conversation._id,
       senderId,
       text: initialMessage.trim(),
-      seen: false
+      seen: false,
+      type: 'request_card',
+      requestMeta: {
+        type: 'hired',
+        targetName: senderName,
+        targetAvatar: sender?.profilePicture || null,
+        requestId: conversation._id.toString(),
+      }
     });
 
     await message.save();
@@ -294,6 +306,8 @@ exports.hireUser = async (req, res) => {
         senderId: message.senderId,
         text: message.text,
         seen: message.seen,
+        type: message.type,
+        requestMeta: message.requestMeta,
         createdAt: message.createdAt
       };
 
