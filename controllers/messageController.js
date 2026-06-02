@@ -130,6 +130,8 @@ exports.sendMessage = async (req, res) => {
         senderId: message.senderId,
         text: message.text,
         seen: message.seen,
+        type: message.type || 'text',
+        requestMeta: message.requestMeta || null,
         createdAt: message.createdAt
       };
 
@@ -238,7 +240,7 @@ exports.markMessagesSeen = async (req, res) => {
  */
 exports.hireUser = async (req, res) => {
   try {
-    const { recipientId, initialMessage } = req.body;
+    const { recipientId, initialMessage, postId, postTitle } = req.body;
     const senderId = req.userId;
     const io = req.io;
 
@@ -285,9 +287,12 @@ exports.hireUser = async (req, res) => {
       type: 'request_card',
       requestMeta: {
         type: 'hired',
+        status: 'pending',
         targetName: senderName,
         targetAvatar: sender?.profilePicture || null,
         requestId: conversation._id.toString(),
+        postId: postId || null,
+        postTitle: postTitle || null,
       }
     });
 
@@ -301,7 +306,7 @@ exports.hireUser = async (req, res) => {
 
     if (io) {
       const messageData = {
-        _id: message._id,
+        _id: message._id, 
         conversationId: message.conversationId,
         senderId: message.senderId,
         text: message.text,
