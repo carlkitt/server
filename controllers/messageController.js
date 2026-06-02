@@ -244,6 +244,8 @@ exports.hireUser = async (req, res) => {
     const senderId = req.userId;
     const io = req.io;
 
+    console.log(`📨 hireUser called - postId: ${postId}, postTitle: ${postTitle ? postTitle.substring(0, 30) : 'none'}`);
+
     if (!mongoose.Types.ObjectId.isValid(recipientId)) {
       return res.status(400).json({ message: 'Invalid recipient ID' });
     }
@@ -297,6 +299,7 @@ exports.hireUser = async (req, res) => {
     });
 
     await message.save();
+    console.log(`✅ Hire request created - message: ${message._id}, postId: ${message.requestMeta.postId}`);
     await message.populate('senderId', 'name username profilePicture');
 
     await Conversation.findByIdAndUpdate(
