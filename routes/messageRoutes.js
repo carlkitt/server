@@ -6,7 +6,11 @@ const {
   sendMessage,
   getOrCreateConversation,
   markMessagesSeen,
-  hireUser
+  hireUser,
+  acceptHireRequest,
+  declineHireRequest,
+  acceptApplicationRequest,
+  declineApplicationRequest
 } = require('../controllers/messageController');
 const authMiddleware = require('../middleware/authMiddleware');
 const User = require('../models/User');
@@ -58,6 +62,18 @@ router.post('/conversations', getOrCreateConversation);
 
 // Hire user - create conversation with initial message
 router.post('/hire', hireUser);
+
+// Accept hire request
+router.post('/hire/:conversationId/accept', acceptHireRequest);
+
+// Decline hire request
+router.post('/hire/:conversationId/decline', declineHireRequest);
+
+// Accept application request
+router.post('/apply/:conversationId/accept', acceptApplicationRequest);
+
+// Decline application request
+router.post('/apply/:conversationId/decline', declineApplicationRequest);
 
 // Get all messages in a conversation
 router.get('/conversations/:conversationId', getMessages);

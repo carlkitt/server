@@ -11,7 +11,22 @@ const NotificationSchema = new mongoose.Schema({
   actorId:     { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   type: {
     type: String,
-    enum: ['like', 'comment', 'share', 'hire', 'follow', 'jobDone', 'review', 'mention', 'system'],
+    enum: [
+      'like',
+      'comment',
+      'share',
+      'hire',
+      'applied',
+      'applicationAccepted',
+      'applicationDeclined',
+      'hireAccepted',
+      'hireDeclined',
+      'follow',
+      'jobDone',
+      'review',
+      'mention',
+      'system'
+    ],
     required: true,
   },
   message:     { type: String, required: true },

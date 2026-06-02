@@ -275,6 +275,101 @@ exports.notifyHire = async (recipientId, actorId, jobTitle) => {
   }
 };
 
+// ── Internal helper: Create applied notification
+exports.notifyApplied = async (recipientId, actorId, jobTitle) => {
+  try {
+    if (recipientId.toString() === actorId.toString()) return;
+
+    await exports.createNotification(
+      recipientId,
+      actorId,
+      'applied',
+      'submitted an application.',
+      null,
+      null,
+      { jobTitle }
+    );
+  } catch (error) {
+    console.error('Error creating apply notification:', error);
+  }
+};
+
+// ── Internal helper: Create application accepted notification
+exports.notifyApplicationAccepted = async (recipientId, actorId, jobTitle) => {
+  try {
+    if (recipientId.toString() === actorId.toString()) return;
+
+    await exports.createNotification(
+      recipientId,
+      actorId,
+      'applicationAccepted',
+      'accepted your application.',
+      null,
+      null,
+      { jobTitle }
+    );
+  } catch (error) {
+    console.error('Error creating accepted notification:', error);
+  }
+};
+
+// ── Internal helper: Create application declined notification
+exports.notifyApplicationDeclined = async (recipientId, actorId, jobTitle) => {
+  try {
+    if (recipientId.toString() === actorId.toString()) return;
+
+    await exports.createNotification(
+      recipientId,
+      actorId,
+      'applicationDeclined',
+      'declined your application.',
+      null,
+      null,
+      { jobTitle }
+    );
+  } catch (error) {
+    console.error('Error creating declined notification:', error);
+  }
+};
+
+// ── Internal helper: Create hire accepted notification
+exports.notifyHireAccepted = async (recipientId, actorId, jobTitle) => {
+  try {
+    if (recipientId.toString() === actorId.toString()) return;
+
+    await exports.createNotification(
+      recipientId,
+      actorId,
+      'hireAccepted',
+      'accepted your hire request.',
+      null,
+      null,
+      { jobTitle }
+    );
+  } catch (error) {
+    console.error('Error creating hire accepted notification:', error);
+  }
+};
+
+// ── Internal helper: Create hire declined notification
+exports.notifyHireDeclined = async (recipientId, actorId, jobTitle) => {
+  try {
+    if (recipientId.toString() === actorId.toString()) return;
+
+    await exports.createNotification(
+      recipientId,
+      actorId,
+      'hireDeclined',
+      'declined your hire request.',
+      null,
+      null,
+      { jobTitle }
+    );
+  } catch (error) {
+    console.error('Error creating hire declined notification:', error);
+  }
+};
+
 // ── Internal helper: Create review notification
 exports.notifyReview = async (recipientId, actorId, reviewText, rating) => {
   try {

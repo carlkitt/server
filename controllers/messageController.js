@@ -310,6 +310,15 @@ exports.hireUser = async (req, res) => {
       });
     }
 
+    // Trigger hire notification for recipient
+    try {
+      const { notifyHire } = require('./notificationController');
+      await notifyHire(recipientId, senderId, 'Hire Request');
+    } catch (notifError) {
+      console.error('Failed to create hire notification:', notifError);
+      // Don't fail the entire request if notification fails
+    }
+
     res.status(201).json({
       conversationId: conversation._id,
       message: 'Hire request sent',
@@ -318,5 +327,129 @@ exports.hireUser = async (req, res) => {
   } catch (err) {
     console.error('hireUser error:', err);
     res.status(500).json({ message: 'Failed to send hire request' });
+  }
+};
+
+// ── Accept hire request ──────────────────────────────────────────────────────
+exports.acceptHireRequest = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.userId;
+    const { hirerUserId } = req.body; // ID of the person who sent the hire request
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: 'Invalid conversation ID' });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    // Send acceptance notification
+    try {
+      const { notifyHireAccepted } = require('./notificationController');
+      await notifyHireAccepted(hirerUserId, userId, 'Hire Request');
+    } catch (notifError) {
+      console.error('Failed to create hire accepted notification:', notifError);
+    }
+
+    res.status(200).json({ message: 'Hire request accepted' });
+  } catch (err) {
+    console.error('acceptHireRequest error:', err);
+    res.status(500).json({ message: 'Failed to accept hire request' });
+  }
+};
+
+// ── Decline hire request ─────────────────────────────────────────────────────
+exports.declineHireRequest = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.userId;
+    const { hirerUserId } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: 'Invalid conversation ID' });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    // Send decline notification
+    try {
+      const { notifyHireDeclined } = require('./notificationController');
+      await notifyHireDeclined(hirerUserId, userId, 'Hire Request');
+    } catch (notifError) {
+      console.error('Failed to create hire declined notification:', notifError);
+    }
+
+    res.status(200).json({ message: 'Hire request declined' });
+  } catch (err) {
+    console.error('declineHireRequest error:', err);
+    res.status(500).json({ message: 'Failed to decline hire request' });
+  }
+};
+
+// ── Accept application request ───────────────────────────────────────────────
+exports.acceptApplicationRequest = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.userId;
+    const { applicantUserId } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: 'Invalid conversation ID' });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    // Send acceptance notification
+    try {
+      const { notifyApplicationAccepted } = require('./notificationController');
+      await notifyApplicationAccepted(applicantUserId, userId, 'Application');
+    } catch (notifError) {
+      console.error('Failed to create accepted notification:', notifError);
+    }
+
+    res.status(200).json({ message: 'Application accepted' });
+  } catch (err) {
+    console.error('acceptApplicationRequest error:', err);
+    res.status(500).json({ message: 'Failed to accept application' });
+  }
+};
+
+// ── Decline application request ──────────────────────────────────────────────
+exports.declineApplicationRequest = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.userId;
+    const { applicantUserId } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: 'Invalid conversation ID' });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    // Send decline notification
+    try {
+      const { notifyApplicationDeclined } = require('./notificationController');
+      await notifyApplicationDeclined(applicantUserId, userId, 'Application');
+    } catch (notifError) {
+      console.error('Failed to create declined notification:', notifError);
+    }
+
+    res.status(200).json({ message: 'Application declined' });
+  } catch (err) {
+    console.error('declineApplicationRequest error:', err);
+    res.status(500).json({ message: 'Failed to decline application' });
   }
 };
