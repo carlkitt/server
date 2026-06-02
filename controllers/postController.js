@@ -258,6 +258,8 @@ exports.getPost = async (req, res) => {
     const { id: postId } = req.params;
     const userId = req.userId;
 
+    console.log(`🔍 Getting post: ${postId}`);
+
     const post = await Post.findById(postId)
       .populate('userId', 'name username avatar profilePicture coverPhoto email')
       .populate('likes', 'name username avatar')
@@ -273,15 +275,18 @@ exports.getPost = async (req, res) => {
       });
 
     if (!post) {
+      console.log(`❌ Post not found: ${postId}`);
       return res.status(404).json({ msg: 'Post not found' });
     }
+
+    console.log(`✅ Post found - userId: ${post.userId?._id}, profilePicture: ${post.userId?.profilePicture ? 'YES' : 'NO'}`);
 
     const postObj = post.toObject();
     postObj.liked = userId ? post.likes.includes(userId) : false;
 
     res.json(postObj);
   } catch (err) {
-    console.error(err);
+    console.error('❌ Get post error:', err);
     res.status(500).json({ msg: 'Server error' });
   }
 };
