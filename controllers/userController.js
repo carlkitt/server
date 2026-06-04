@@ -373,3 +373,33 @@ exports.isFollowing = async (req, res) => {
     res.status(500).json({ message: 'Failed to check follow status' });
   }
 };
+
+// ── getSuggestedUsers ──────────────────────────────────────────────────────
+// Get users suggestions excluding current user and already-following users
+exports.getSuggestedUsers = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const limit = parseInt(req.query.limit) || 5;
+
+    const currentUser = await User.findById(userId);
+    if (!currentUser) return res.status(404).json({ message: 'User not found' });
+
+    // Find users that:
+    // 1. Are not the current user
+    // 2. Are not already followed
+    // 3. Sort by followersCount (most popular) or by date (newest)
+    const suggestedUsers = await User.find({
+      _id: {
+        $nin: [userId, ...(currentUser.following || [])],
+      },
+    })
+      .select('_id name username profilePicture bio skills followersCount createdAt')
+      .sort({ followersCount: -1, createdAt: -1 })
+      .limit(limit);
+
+    res.json(suggestedUsers);
+  } catch (err) {
+    console.error('getSuggestedUsers error:', err);
+    res.status(500).json({ message: 'Failed to get suggested users' });
+  }
+};

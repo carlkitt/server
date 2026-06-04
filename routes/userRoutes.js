@@ -10,6 +10,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // Specific routes first (before /:id)
 router.get('/me', auth, userController.getMe);
+router.get('/suggestions', auth, userController.getSuggestedUsers);
 router.put('/profile', auth, userController.updateProfile);
 router.post('/upload-avatar', auth, upload.single('avatar'), userController.uploadAvatar);
 router.post('/upload-cover', auth, upload.single('coverPhoto'), userController.uploadCoverPhoto);
@@ -24,4 +25,3 @@ router.get('/:id', auth, userController.getUser);
 router.put('/:id', auth, userController.updateUser);
 
 module.exports = router;
-
