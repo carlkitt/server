@@ -1,6 +1,7 @@
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
+const Post = require('../models/Post');
 const mongoose = require('mongoose');
 
 /**
@@ -276,11 +277,32 @@ exports.hireUser = async (req, res) => {
       await conversation.save();
     }
 
-    // Get sender details for requestMeta
-    const sender = await User.findById(senderId).select('name username firstName lastName profilePicture');
-    const senderName = sender 
-      ? (sender.name || `${sender.firstName} ${sender.lastName}` || sender.username || 'User').trim()
+    // Get recipient details for requestMeta - showing who we're sending the hire request TO
+    const recipientUser = await User.findById(recipientId).select('name username firstName lastName profilePicture');
+    const recipientName = recipientUser 
+      ? (recipientUser.name || `${recipientUser.firstName} ${recipientUser.lastName}` || recipientUser.username || 'User').trim()
       : 'User';
+    
+    // Fetch full post data if postId provided, for richer preview
+    let postData = { postId, postTitle };
+    if (postId) {
+      try {
+        const post = await Post.findById(postId).select('content images skills location type');
+        if (post) {
+          postData = {
+            postId: post._id.toString(),
+            postTitle: postTitle || post.content?.substring(0, 50) || 'View Post',
+            content: post.content,
+            images: post.images || [],
+            skills: post.skills || [],
+            location: post.location,
+            type: post.type,
+          };
+        }
+      } catch (postError) {
+        console.warn(`Could not fetch post ${postId} for requestMeta:`, postError.message);
+      }
+    }
     
     // Create message with requestMeta for hire request card
     const message = new Message({
@@ -292,16 +314,15 @@ exports.hireUser = async (req, res) => {
       requestMeta: {
         type: 'hired',
         status: 'pending',
-        targetName: senderName,
-        targetAvatar: sender?.profilePicture || null,
+        targetName: recipientName,
+        targetAvatar: recipientUser?.profilePicture || null,
         requestId: conversation._id.toString(),
-        postId: postId || null,
-        postTitle: postTitle || null,
+        ...postData,
       }
     });
 
     await message.save();
-    console.log(`✅ Hire request created - message: ${message._id}, postId: ${message.requestMeta.postId}, targetName: ${senderName}`);
+    console.log(`✅ Hire request created - message: ${message._id}, postId: ${message.requestMeta.postId}, targetName: ${recipientName}`);
     await message.populate('senderId', 'name username profilePicture');
 
     await Conversation.findByIdAndUpdate(
