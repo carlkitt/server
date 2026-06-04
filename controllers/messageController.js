@@ -277,8 +277,10 @@ exports.hireUser = async (req, res) => {
     }
 
     // Get sender details for requestMeta
-    const sender = await User.findById(senderId).select('firstName lastName profilePicture');
-    const senderName = sender ? `${sender.firstName} ${sender.lastName}` : 'User';
+    const sender = await User.findById(senderId).select('name username firstName lastName profilePicture');
+    const senderName = sender 
+      ? (sender.name || `${sender.firstName} ${sender.lastName}` || sender.username || 'User').trim()
+      : 'User';
     
     // Create message with requestMeta for hire request card
     const message = new Message({
@@ -299,7 +301,7 @@ exports.hireUser = async (req, res) => {
     });
 
     await message.save();
-    console.log(`✅ Hire request created - message: ${message._id}, postId: ${message.requestMeta.postId}`);
+    console.log(`✅ Hire request created - message: ${message._id}, postId: ${message.requestMeta.postId}, targetName: ${senderName}`);
     await message.populate('senderId', 'name username profilePicture');
 
     await Conversation.findByIdAndUpdate(
