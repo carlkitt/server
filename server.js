@@ -40,10 +40,13 @@ const corsOptions = {
       process.env.FRONTEND_URL || 'http://localhost:3000',
       'http://localhost:3000',
       'http://localhost:54680',
-      'http://10.0.0.34:3000'
+      'http://10.0.0.34:3000',
+      'https://skilllink-puce-vercel.app', // Vercel web app
+      'https://*.vercel.app' // Any Vercel deployment
     ];
     
-    if (allowedOrigins.includes(origin)) {
+    // Check exact match or wildcard match
+    if (allowedOrigins.includes(origin) || origin.includes('.vercel.app')) {
       return callback(null, true);
     }
     
