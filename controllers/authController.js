@@ -7,8 +7,17 @@ exports.register = async (req, res) => {
     const { name, username, email, password, phone } = req.body;
     if (!name || !username || !email || !password) return res.status(400).json({ msg: 'Missing fields' });
 
-    let user = await User.findOne({ $or: [{ email }, { username }] });
-    if (user) return res.status(400).json({ msg: 'User already exists' });
+    // Check duplicates individually so frontend can show precise errors
+    let existing = await User.findOne({ email });
+    if (existing) return res.status(409).json({ msg: 'Email already in use', field: 'email' });
+
+    existing = await User.findOne({ username });
+    if (existing) return res.status(409).json({ msg: 'Username already taken', field: 'username' });
+
+    if (phone) {
+      existing = await User.findOne({ phone });
+      if (existing) return res.status(409).json({ msg: 'Phone number already linked to another account', field: 'phone' });
+    }
 
     const salt = await bcrypt.genSalt(10);
     const hashed = await bcrypt.hash(password, salt);
